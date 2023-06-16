@@ -2,7 +2,6 @@ import numpy as np
 
 from collections import Counter
 from checker import BaseChecker
-from user import SUCCESS_SIGNAL, FAILURE_SIGNAL
 
 
 class ConversationalAgent():

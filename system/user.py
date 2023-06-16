@@ -2,9 +2,6 @@ import numpy as np
 
 from typing import List
 
-SUCCESS_SIGNAL = "success"
-FAILURE_SIGNAL = "failure"
-
 
 class UserAgent():
     def __init__(self, max_turn: int = 15, enable_not_know: bool = False, enabl_quit: bool = False):  

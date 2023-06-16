@@ -1,0 +1,6 @@
+SUCCESS_SIGNAL = "success"
+FAILURE_SIGNAL = "failure"
+
+QUERY_ITEM_SIGNAL = "item"
+QUERY_ATTRIBUTE_SINGAL = "attribute"
+QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
