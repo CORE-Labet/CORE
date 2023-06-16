@@ -17,10 +17,14 @@ class BaseChecker():
         raise NotImplementedError
 
 
-
 class ItemChecker(BaseChecker):
     def __init__(self, n_shots: int = 1, query_attribute_val: bool = False, query_attribute_only: bool = False, query_item_only: bool = False):
         super().__init__(n_shots, query_attribute_val, query_attribute_only, query_item_only)
+
+
+class AttributeChecker(BaseChecker):
+    def __init__(self, n_items: int = 1, n_attribute_val: int = 1, query_attribute_val: bool = False, query_attribute_only: bool = False, query_item_only: bool = False):
+        super().__init__(n_items, n_attribute_val, query_attribute_val, query_attribute_only, query_item_only)
     
 
 class Checker():
