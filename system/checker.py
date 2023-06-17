@@ -3,7 +3,7 @@ import random
 
 from collections import Counter
 from typing import List, Dict
-from utils import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
+from agent import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
 
 
 class BaseChecker():
@@ -20,7 +20,7 @@ class BaseChecker():
         score_dict = dict(sorted(score_dict.items(), key=lambda x: x[1], reverse=True))
         return list(score_dict.keys())
 
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: List[Dict[int, List]]):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         raise NotImplementedError
 
     def evaluate(self, data_matrix: np.ndarray, item_ids: List[int]):
@@ -48,18 +48,18 @@ class AttributeChecker(BaseChecker):
         super().__init__(n_items=n_items, n_attribute_val=n_attribute_val, query_attribute_val=query_attribute_val, 
                             query_attribute_only=query_attribute_only, query_item_only=query_item_only)
 
-    def act(self, data_matrix: np.ndarray, attribute_ids: List[Dict[int, List]]):
+    def act(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List]):
         assert not self.query_item_only
         entros = []
-        for attribute_id in attribute_ids:
-            num_dict = Counter(data_matrix[:,attribute_id.keys()])
+        for attribute_id in attribute_ids.keys():
+            num_dict = Counter(data_matrix[:,attribute_id])
             value_num = list(num_dict.values())
             sum_value = sum(value_num)
             entro = 0 # entropy for attribute_id
             for value in value_num:
                 entro += - (value / sum_value) * np.log2(value / sum_value)
             entros.append(entro)
-        max_attribute_id = attribute_ids[entros.index(max(entros))]
+        max_attribute_id = list(attribute_ids.keys())[entros.index(max(entros))]
 
         if self.query_attribute_val:
             random_attribute_values = random.choice(attribute_ids[max_attribute_id], k=self.n_attribute_val)     # randomly select a value
@@ -92,15 +92,15 @@ class CoreChecker(BaseChecker):
         max_cert = sum(list(score_dict.values())[:self.n_items])
         return (max_item_ids, max_cert)
 
-    def _calculate_query_attribute(self, data_matrix: np.ndarray, attribute_ids: List[Dict[int, List]]):
+    def _calculate_query_attribute(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List]):
         sum_score = data_matrix[:,-1].sum()
         cert_gains = []
-        for attribute_id in attribute_ids:
-            num_dict = Counter(data_matrix[:,attribute_id.keys()])
+        for attribute_id in attribute_ids.keys():
+            num_dict = Counter(data_matrix[:,attribute_id])
             value_name = list(num_dict.keys())
             cert = 0
             for value in value_name:
-                value_mask = data_matrix[:,attribute_id.keys()] != value # select items not equal to value
+                value_mask = data_matrix[:,attribute_id] != value # select items not equal to value
                 value_score = data_matrix[value_mask][:,-1].sum()
                 prob = 1 - value_score / sum_score
                 cert += prob * value_score + (1 - prob) * (sum_score - value_score)

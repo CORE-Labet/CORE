@@ -3,6 +3,10 @@ import numpy as np
 from collections import Counter
 from checker import BaseChecker
 
+QUERY_ITEM_SIGNAL = "item"
+QUERY_ATTRIBUTE_SINGAL = "attribute"
+QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
+
 
 class ConversationalAgent():
     def __init__(self, checker_name, cold_start: bool = False, query_attribute_val: bool = False):
