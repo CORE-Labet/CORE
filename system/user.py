@@ -51,24 +51,26 @@ class UserAgent():
     
     def _reponse_attribute_value(self, item_ids: List[int], attribute_ids: Dict[int, List[int]], query_attribute_id: int, query_attribute_vals: List[int]):
         label_attribute_values = list(self.label_data_matrix[:,query_attribute_id])
-        if query_attribute_value in label_attribute_values:
-            label_mask = self.data_matrix[:,query_attribute_id] == query_attribute_value
+        query_label_attribute_values = list(set(query_attribute_vals) & set(label_attribute_values))
+        if query_label_attribute_values:
+            label_mask = self.data_matrix[:,query_attribute_id] in query_label_attribute_values
             item_ids_matrix = np.array([_ for _ in range(self.data_matrix.shape[0])])
             label_item_ids = item_ids_matrix[label_mask]
             item_ids = list(set(item_ids) & set(label_item_ids))
         else:
-            not_label_mask = self.data_matrix[:,query_attribute_id] == query_attribute_value
+            not_label_mask = self.data_matrix[:,query_attribute_id] in query_attribute_vals
             item_ids_matrix = np.array([_ for _ in range(self.data_matrix.shape[0])])
             not_label_item_ids = item_ids_matrix[not_label_mask]
             item_ids = list(set(item_ids) - set(not_label_item_ids))
-        attribute_vals[query_attribute_id].remove(query_attribute_value) # remove queried value
-        if not attribute_vals[query_attribute_id]:
-            attribute_ids.remove(query_attribute_id) # if all the values are queried, remove attribute
+        
+        attribute_ids[query_attribute_id] = [attribute_val for attribute_val in attribute_ids[query_attribute_id] if attribute_val not in query_attribute_vals]
+        if not attribute_ids[query_attribute_id]:
+            attribute_ids.pop(query_attribute_id) # if all the values are queried, remove attribute
         
         # only store label_ids in item_ids
         self.label_ids = list(set(self.label_ids) & set(item_ids))
         self.label_data_matrix = self.data_matrix[self.label_ids,:]
-        return (item_ids, (attribute_ids, attribute_vals))
+        return (item_ids, attribute_ids)
 
     def response(self, item_ids: List[int], attribute_ids: Dict[int, List[int]], query_type: str, query_id, num_turn: int):
         if self.enable_quit:
