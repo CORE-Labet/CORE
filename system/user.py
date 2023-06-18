@@ -97,3 +97,9 @@ class UserAgent():
             if query_item_id in self.label_ids:
                 return SUCCESS_SIGNAL
         return FAILURE_SIGNAL
+    
+    def decode(self):
+        raise NotImplementedError
+    
+    def encode(self):
+        raise NotImplementedError

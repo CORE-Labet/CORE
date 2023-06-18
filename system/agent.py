@@ -1,7 +1,10 @@
 import numpy as np
 
+from typing import List, Dict
 from collections import Counter
 from checker import BaseChecker
+from trainer import BaseTrainer
+from render import BaseRender
 
 QUERY_ITEM_SIGNAL = "item"
 QUERY_ATTRIBUTE_SINGAL = "attribute"
@@ -9,55 +12,66 @@ QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
 
 
 class ConversationalAgent():
-    def __init__(self, checker_name, cold_start: bool = False, query_attribute_val: bool = False):
-        self.checker = BaseChecker(checker_name=checker_name, query_attribute_val=query_attribute_val)
+    def __init__(self, checker: BaseChecker = None, trainer: BaseTrainer = None, render: BaseRender = None, 
+                    cold_start: bool = False):
+        self.checker = checker
+        self.trainer = trainer
+        self.render = render
+
         self.num_turn = 0
         self.cold_start = cold_start
-        self.query_attribute_val = query_attribute_val # query attribute value instead of attribute id
-        # initial
         self.data_matrix, self.item_ids, self.attribute_ids = None, None, None
-        # record checked items
-        self.checked_item_ids = []
+        self.checked_item_ids = []  # record checked items
+        self.item_ids = []
+        self.attribute_ids = {}
 
     # go to next sesssion
-    def set_session(self, session_id, data_matrix):
+    def set_session(self, session_id: int, data_matrix: np.ndarray):
         self.num_turn = 0
         self.session_id = session_id
         self.data_matrix = data_matrix
-        # item_ids and attribute_ids are list of ids
-        self.item_ids = [_ for _ in range(self.data_matrix.shape[0])]
-        self.attribute_ids = [_ for _ in range(self.data_matrix.shape[1])]
-        # if cold-start, there is no labels
-        if self.cold_start:
+        if self.cold_start: # if cold-start, there is no labels
             self.data_matrix[:, -1] = 1
-        if self.value_querier:
-            self.attribute_vals = []
-            for attribute_id in self.attribute_ids:
-                attribute_dict = Counter(data_matrix[:,attribute_id])
-                self.attribute_vals.append(list(attribute_dict.keys()))
-        # re-initial
-        self.checked_item_ids = list()
+
+        self.item_ids = [_ for _ in range(self.data_matrix.shape[0])]
+        self.attribute_ids = {} # reset
+        attribute_ids = [_ for _ in range(self.data_matrix.shape[1] - 1)]  # last col is label
+        for attribute_id in attribute_ids:
+            attribute_dict = Counter(data_matrix[:,attribute_id])
+            self.attribute_ids.update({attribute_id: list(attribute_dict.keys())})
+        self.checked_item_ids = list()  # reset
     
     # go to next turn
-    def set_turn(self, item_ids, attribute_ids):
-        if self.value_querier:
-            self.attribute_ids, self.attribute_vals = attribute_ids
-        else:
-            self.attribute_ids = attribute_ids
+    def set_turn(self, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         checked_item_ids = list(set(self.item_ids) - set(item_ids))
         self.checked_item_ids.extend(checked_item_ids)
-        self.checked_item_ids.sort() # convenience for debug
+        
         self.item_ids = item_ids
+        self.attribute_ids = attribute_ids
         self.num_turn += 1
 
-    def act_checker(self):
-        if self.value_querier:
-            attribute_ids = (self.attribute_ids, self.attribute_vals)
-        else:
-            attribute_ids = self.attribute_ids
-        query_type, query_id = self.checker.act(self.data_matrix, self.item_ids, attribute_ids, self.num_turn)  
-        return (self.item_ids, attribute_ids, query_type, query_id)
+        self.checked_item_ids.sort()
+        self.item_ids.sort()
+        self.attribute_ids = dict(sorted(self.attribute_ids.items(), key=lambda x: x[0]))
+        for attribute_vals in self.attribute_ids.values():
+            attribute_vals.sort()
+
+    def check(self):
+        query_type, query_id = self.checker.act(data_matrix=self.data_matrix, item_ids=self.item_ids, attribute_ids=self.attribute_ids, num_turn=self.num_turn)  
+        return (self.item_ids, self.attribute_ids, query_type, query_id)
     
-    def act_evaluator(self):
-        query_id = self.checker.evaluate(self.data_matrix, self.item_ids, self.attribute_ids)
+    def evaluate(self):
+        query_type, query_id = self.checker.evaluate(data_matrix=self.data_matrix, item_ids=self.item_ids)
+        assert query_type == QUERY_ITEM_SIGNAL, f"during evaluation, query type {query_type} must be {QUERY_ITEM_SIGNAL}"
         return query_id
+    
+    def train(self):
+        raise NotImplementedError
+    
+    def decode(self):
+        # self.render.decode()
+        raise NotImplementedError
+    
+    def encode(self):
+        # self.render.encode()
+        raise NotImplementedError

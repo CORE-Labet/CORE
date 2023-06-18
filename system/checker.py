@@ -20,7 +20,7 @@ class BaseChecker():
         score_dict = dict(sorted(score_dict.items(), key=lambda x: x[1], reverse=True))
         return list(score_dict.keys())
 
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
         raise NotImplementedError
 
     def evaluate(self, data_matrix: np.ndarray, item_ids: List[int]):
@@ -33,7 +33,7 @@ class ItemChecker(BaseChecker):
         super().__init__(n_items=n_items, n_attribute_val=n_attribute_val, query_attribute_val=query_attribute_val, 
                             query_attribute_only=query_attribute_only, query_item_only=query_item_only)
 
-    def act(self, data_matrix: np.ndarray, item_ids: List[int]):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
         assert not self.query_attribute_only
         sorted_items = self._sort_item(data_matrix=data_matrix, item_ids=item_ids)
         return (QUERY_ITEM_SIGNAL, sorted_items[:self.n_items])
@@ -48,7 +48,7 @@ class AttributeChecker(BaseChecker):
         super().__init__(n_items=n_items, n_attribute_val=n_attribute_val, query_attribute_val=query_attribute_val, 
                             query_attribute_only=query_attribute_only, query_item_only=query_item_only)
 
-    def act(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List]):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
         assert not self.query_item_only
         entros = []
         for attribute_id in attribute_ids.keys():
@@ -87,7 +87,7 @@ class CoreChecker(BaseChecker):
         self.enable_dependence = enable_dependence
         self.dependence_matrx = dependence_matrx
     
-    def _calculate_query_item(self, data_matrix: np.ndarray, item_ids: List[int]):
+    def _calculate_item(self, data_matrix: np.ndarray, item_ids: List[int]):
         sum_score = data_matrix[:,-1].sum()
         cert_gains = []
         for item_id in item_ids:
@@ -101,7 +101,7 @@ class CoreChecker(BaseChecker):
         max_cert = sum(list(score_dict.values())[:self.n_items])
         return (max_item_ids, max_cert)
 
-    def _calculate_query_attribute(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List]):
+    def _calculate_attribute(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List]):
         sum_score = data_matrix[:,-1].sum()
         cert_gains = []
         for attribute_id in attribute_ids.keys():
@@ -117,8 +117,11 @@ class CoreChecker(BaseChecker):
         max_cert = max(cert_gains)
         max_attribute_id = attribute_ids[cert_gains.index(max_cert)].keys()
         return (max_attribute_id, max_cert)
+
+    def _calculate_attribute_with_dependence(self):
+        raise NotImplementedError
     
-    def _calculate_query_attribute_val(self, data_matrix: np.ndarray, attribute_ids: List[Dict[int, List]]):
+    def _calculate_attribute_val(self, data_matrix: np.ndarray, attribute_ids: List[Dict[int, List]]):
         sum_score = data_matrix[:,-1].sum()
         cert_gains = {} # include attribute_id: gain of querying each attribute id (sum of top-n_attribute_vals)
         attribute_vals = {} # include attribute_id: top-n_attribute_vals attribute vals of attribute id
@@ -140,21 +143,24 @@ class CoreChecker(BaseChecker):
         max_attribute_vals = attribute_vals[max_attribute_id]
         return (max_attribute_id, max_attribute_vals, max_cert)
     
+    def _calculate_attribute_val_with_dependence(self):
+        raise NotImplementedError
+    
     def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
         if self.query_item_only:
-            max_item_ids, _ = self._calculate_query_item(data_matrix=data_matrix, item_ids=item_ids)
+            max_item_ids, _ = self._calculate_item(data_matrix=data_matrix, item_ids=item_ids)
             return (QUERY_ITEM_SIGNAL, max_item_ids)
         if self.query_attribute_only:
             if self.query_attribute_val:
-                max_attribute_id, max_attribute_vals, _ = self._calculate_query_attribute_val(data_matrix=data_matrix, attribute_ids=attribute_ids)
+                max_attribute_id, max_attribute_vals, _ = self._calculate_attribute_val(data_matrix=data_matrix, attribute_ids=attribute_ids)
                 return (QUERY_ATTRIBUTE_VAL_SIGNAL, (max_attribute_id, max_attribute_vals))
             else:
-                max_attribute_id, _ = self._calculate_query_attribute(data_matrix=data_matrix, attribute_ids=attribute_ids)
+                max_attribute_id, _ = self._calculate_attribute(data_matrix=data_matrix, attribute_ids=attribute_ids)
                 return (QUERY_ATTRIBUTE_SINGAL, max_attribute_id)
         
-        max_item_ids, max_item_cert = self._calculate_query_item(data_matrix=data_matrix, item_ids=item_ids)
+        max_item_ids, max_item_cert = self._calculate_item(data_matrix=data_matrix, item_ids=item_ids)
         if self.query_attribute_val:
-            max_attribute_id, max_attribute_vals, max_value_cert = self._calculate_query_attribute_val(data_matrix=data_matrix, attribute_ids=attribute_ids)
+            max_attribute_id, max_attribute_vals, max_value_cert = self._calculate_attribute_val(data_matrix=data_matrix, attribute_ids=attribute_ids)
             if max_item_cert >= max_value_cert:
                 return (QUERY_ITEM_SIGNAL, max_item_ids)
             else:
@@ -163,7 +169,7 @@ class CoreChecker(BaseChecker):
                 else:
                     return (QUERY_ATTRIBUTE_VAL_SIGNAL, (max_attribute_id, max_attribute_vals))
         else:
-            max_attribute_id, max_value_cert = self._calculate_query_attribute(data_matrix=data_matrix, attribute_ids=attribute_ids)
+            max_attribute_id, max_value_cert = self._calculate_attribute(data_matrix=data_matrix, attribute_ids=attribute_ids)
             if max_item_cert >= max_value_cert:
                 return (QUERY_ITEM_SIGNAL, max_item_ids)
             else:
@@ -173,5 +179,5 @@ class CoreChecker(BaseChecker):
                     return (QUERY_ATTRIBUTE_SINGAL, max_attribute_id)
 
     def evaluate(self, data_matrix: np.ndarray, item_ids: List[int]):
-        max_item_ids, _ = self._calculate_query_item(data_matrix=data_matrix, item_ids=item_ids)
+        max_item_ids, _ = self._calculate_item(data_matrix=data_matrix, item_ids=item_ids)
         return (QUERY_ITEM_SIGNAL, max_item_ids)
