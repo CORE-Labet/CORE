@@ -22,34 +22,34 @@ class BaseTrainer(nn.Module):
 
 class TowerTrainer(BaseTrainer):
     def __init__(self, feature_num: int, input_size: int, hidden_sizes: List[int], 
-                    dropout: float = 0.5, field_num: int = 0, model_name: str = "fm"): 
+                    dropout: float = 0.5, model_name: str = "fm"): 
         super(BaseTrainer, self).__init__(feature_num=feature_num, input_size=input_size)
         self.model_name = model_name
         self.mlp = MLP(in_channels=input_size, hidden_sizes=hidden_sizes, norm_layer=BatchNormTrans, dropout=dropout)
         self.model = self._load_model(model_name = model_name, input_size=input_size, hidden_sizes=hidden_sizes, 
-                                        feature_num=feature_num, field_num=field_num, dropout=dropout)
+                                        feature_num=feature_num, dropout=dropout)
     
-    def _load_model(self, model_name, input_size, hidden_sizes, feature_num, field_num, dropout):
+    def _load_model(self, model_name, input_size, hidden_sizes, feature_num, dropout):
         if model_name in ["fm", "deepfm", "pnn"]:
-            return self._load_fm_model(model_name=model_name, input_size=input_size, feature_num=feature_num, field_num=field_num)
+            return self._load_fm_model(model_name=model_name, input_size=input_size, feature_num=feature_num)
         elif model_name in ["esmm", "esmm2", "mmoe"]:
             return self._load_expert_model(model_name=model_name, input_size=input_size, hidden_sizes=hidden_sizes, dropout=dropout)
         else:
             print(f"{model_name} must be in [fm, deepfm, pnn, esmm, esmm2, mmoe]")
             raise NotImplementedError
 
-    def _load_fm_model(self, model_name, input_size, feature_num, field_num):
+    def _load_fm_model(self, model_name, input_size, feature_num):
         w1 = nn.Embedding(feature_num, 1)
         if model_name == "fm":
             self.requires_mlp = True
-            return FM(w1=w1, v=self.embedding, field_num=field_num, point_dot=False)
+            return FM(w1=w1, v=self.embedding, feature_num=feature_num, point_dot=False)
         elif model_name == "deepfm":
             self.requires_mlp = False
-            fm_part = FM(w1=w1, v=self.embedding, field_num=field_num, point_dot=True)
+            fm_part = FM(w1=w1, v=self.embedding, feature_num=feature_num, point_dot=True)
             return DeepFM(fm_part=fm_part, deep_part=self.mlp)
         elif model_name == "pnn":
             self.requires_mlp = True
-            fm_part = FM(w1=w1, v=self.embedding, field_num=field_num, point_dot=False)
+            fm_part = FM(w1=w1, v=self.embedding, feature_num=feature_num, point_dot=False)
             return PNN(input_size=input_size, fm_part=fm_part)
         else:
             raise NotImplementedError

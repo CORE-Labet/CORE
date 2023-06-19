@@ -68,10 +68,9 @@ class ConversationalAgent():
     def train(self):
         raise NotImplementedError
     
-    def decode(self):
-        # self.render.decode()
-        raise NotImplementedError
-    
-    def encode(self):
-        # self.render.encode()
-        raise NotImplementedError
+    def check_with_render(self, response: str) -> str:
+        assert isinstance(self.render, BaseRender)
+        item_ids, attribute_ids = self.render.response2ids(response=response)
+        self.set_turn(item_ids=item_ids, attribute_ids=attribute_ids)
+        _, _, query_type, query_id = self.check()
+        raise self.render.ids2query(query_type=query_type, query_id=query_id)

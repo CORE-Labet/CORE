@@ -2,6 +2,7 @@ import numpy as np
 
 from typing import List, Dict
 from agent import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
+from render import BaseRender
 
 SUCCESS_SIGNAL = "success"
 FAILURE_SIGNAL = "failure"
@@ -9,11 +10,12 @@ QUIT_SINGAL = "quit"
 
 
 class UserAgent():
-    def __init__(self, max_turn: int = 15, enable_not_know: bool = False, enable_quit: bool = False, num_not_know: int = 3):  
+    def __init__(self, max_turn: int = 15, enable_not_know: bool = False, enable_quit: bool = False, num_not_know: int = 3, render: BaseRender = None):  
         self.max_turn = max_turn 
         self.enable_not_know = enable_not_know  # enable user return Not Know
         self.num_not_know = num_not_know    # if more than um_not_know items in attribute id return not know and remove attribute id
         self.enable_quit = enable_quit    # enable user quit at max_turn
+        self.render = render
 
         self.label_ids, self.data_matrix, self.label_data_matrix = None, None, None
     
@@ -98,8 +100,8 @@ class UserAgent():
                 return SUCCESS_SIGNAL
         return FAILURE_SIGNAL
     
-    def decode(self):
-        raise NotImplementedError
-    
-    def encode(self):
-        raise NotImplementedError
+    def response_with_render(self, item_ids: List[int], attribute_ids: Dict[int, List[int]], query: str, num_turn: int) -> str:
+        assert isinstance(self.render, BaseRender)
+        query_type, query_id = self.render.query2ids(query=query, item_ids=item_ids, attribute_ids=attribute_ids)
+        reponse_ids = self.response(item_ids=item_ids, attribute_ids=attribute_ids, query_type=query_type, query_id=query_id, num_turn=num_turn)
+        return self.render.ids2response(response_ids=reponse_ids)
