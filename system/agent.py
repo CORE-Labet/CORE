@@ -10,10 +10,9 @@ QUERY_ITEM_SIGNAL = "item"
 QUERY_ATTRIBUTE_SINGAL = "attribute"
 QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
 
-
 class ConversationalAgent():
-    def __init__(self, checker: BaseChecker = None, trainer: BaseTrainer = None, render: BaseRender = None, 
-                    cold_start: bool = False):
+    def __init__(self, checker: BaseChecker = None, trainer: BaseTrainer = None,
+                    render: BaseRender = None, cold_start: bool = False):
         self.checker = checker
         self.trainer = trainer
         self.render = render
@@ -64,6 +63,9 @@ class ConversationalAgent():
         query_type, query_id = self.checker.evaluate(data_matrix=self.data_matrix, item_ids=self.item_ids)
         assert query_type == QUERY_ITEM_SIGNAL, f"during evaluation, query type {query_type} must be {QUERY_ITEM_SIGNAL}"
         return query_id
+
+    def load(self):
+        raise NotImplementedError
     
     def train(self):
         raise NotImplementedError

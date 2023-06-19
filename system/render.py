@@ -1,6 +1,7 @@
 import openai
 
 from typing import Dict, List
+from utils import Template
 
 OPENAI_API_KEY = ""
 
@@ -15,7 +16,7 @@ def get_completion(prompt, model):
 
 
 class BaseRender():
-
+    
     def response2ids(self, response: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         raise NotImplementedError
     
@@ -30,8 +31,8 @@ class BaseRender():
 
 
 class RuleRender(BaseRender):
-    def __init__(self, model_name: str = "gpt-3.5-turbo"):
-        self.model_name = model_name    
+    def __init__(self, template: Template):
+        self.model_name = template    
         
     def response2ids(self, response: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         raise NotImplementedError

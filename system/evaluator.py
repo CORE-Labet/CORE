@@ -3,6 +3,9 @@ import torch
 import random
 
 from transformers import is_torch_available
+from user import UserAgent
+from agent import ConversationalAgent
+from data import DataManager
 
 def set_seed(seed):
     np.random.seed(seed)
