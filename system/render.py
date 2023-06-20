@@ -1,9 +1,8 @@
 import openai
 
 from typing import Dict, List
-from utils import Template
-
-OPENAI_API_KEY = ""
+from utils import PromptTemplate
+from utils import load_openai_key
 
 def get_completion(prompt, model):
     messages = [{"role": "user", "content": prompt}]
@@ -16,6 +15,8 @@ def get_completion(prompt, model):
 
 
 class BaseRender():
+    def __init__(self, template: PromptTemplate = None):
+        self.template = template
     
     def response2ids(self, response: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         raise NotImplementedError
@@ -31,8 +32,10 @@ class BaseRender():
 
 
 class RuleRender(BaseRender):
-    def __init__(self, template: Template):
-        self.model_name = template    
+    def __init__(self, template: PromptTemplate = None):
+        super().__init__(template=template)
+        if not template:
+            self.template = PromptTemplate
         
     def response2ids(self, response: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         raise NotImplementedError
@@ -48,8 +51,12 @@ class RuleRender(BaseRender):
     
 
 class LMRender(BaseRender):
-    def __init__(self, model_name: str = "gpt-3.5-turbo"):
-        self.model_name = model_name    
+    def __init__(self, template: PromptTemplate = None, model_name: str = "gpt-3.5-turbo", key_file: str = None):
+        super().__init__(template=template)
+        self.model_name = model_name
+        openai.api_key = load_openai_key(key_file=key_file) 
+        if not template:
+            self.template = PromptTemplate()   
         
     def response2ids(self, response: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         raise NotImplementedError
@@ -62,3 +69,7 @@ class LMRender(BaseRender):
     
     def query2ids(self, query: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
         raise NotImplementedError
+
+
+if __name__ == "__main__":
+    template = PromptTemplate

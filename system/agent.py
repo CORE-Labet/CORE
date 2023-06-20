@@ -19,7 +19,7 @@ class ConversationalAgent():
 
         self.num_turn = 0
         self.cold_start = cold_start
-        self.data_matrix, self.item_ids, self.attribute_ids = None, None, None
+        self.data_matrix = None
         self.checked_item_ids = []  # record checked items
         self.item_ids = []
         self.attribute_ids = {}
