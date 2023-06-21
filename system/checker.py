@@ -146,7 +146,7 @@ class CoreChecker(BaseChecker):
     def _calculate_attribute_val_with_dependence(self):
         raise NotImplementedError
     
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], turn_id=0):
         if self.query_item_only:
             max_item_ids, _ = self._calculate_item(data_matrix=data_matrix, item_ids=item_ids)
             return (QUERY_ITEM_SIGNAL, max_item_ids)
@@ -164,7 +164,7 @@ class CoreChecker(BaseChecker):
             if max_item_cert >= max_value_cert:
                 return (QUERY_ITEM_SIGNAL, max_item_ids)
             else:
-                if self.enable_penalty and self.penalty_weight and self.penalty_weight * num_turn >= max_value_cert:
+                if self.enable_penalty and self.penalty_weight and self.penalty_weight * turn_id >= max_value_cert:
                     return (QUERY_ITEM_SIGNAL, max_item_ids)
                 else:
                     return (QUERY_ATTRIBUTE_VAL_SIGNAL, (max_attribute_id, max_attribute_vals))
@@ -173,7 +173,7 @@ class CoreChecker(BaseChecker):
             if max_item_cert >= max_value_cert:
                 return (QUERY_ITEM_SIGNAL, max_item_ids)
             else:
-                if self.enable_penalty and self.penalty_weight and self.penalty_weight * num_turn >= max_value_cert:
+                if self.enable_penalty and self.penalty_weight and self.penalty_weight * turn_id >= max_value_cert:
                     return (QUERY_ITEM_SIGNAL, max_item_ids)
                 else:
                     return (QUERY_ATTRIBUTE_SINGAL, max_attribute_id)

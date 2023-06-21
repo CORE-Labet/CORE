@@ -4,7 +4,6 @@ import random
 from typing import List, Dict
 from collections import Counter
 from retriever import BaseRetriever
-from user import QUIT_SINGAL, NOT_KNOW_SINGAL
 
 
 class DataManager:
@@ -19,8 +18,9 @@ class DataManager:
         self.session2user = {}  # map from session_id to user_id
         self.candidate_data_matrix = None
     
-    def set_num_candidate_items(self, num_candidate_item_per_session: int):
-        self.retriever.num_candidate_items = num_candidate_item_per_session
+    def set_retriever(self, num_candidate_items: int = None, pos_neg_ratio: float = None):
+        self.retriever.num_candidate_items = num_candidate_items if num_candidate_items else self.retriever.num_candidate_items
+        self.retriever.pos_neg_ratio = pos_neg_ratio if pos_neg_ratio else self.retriever.pos_neg_ratio
     
     def reset4simulation(self, train_data_matrix: np.ndarray, train_label_ids: Dict[int, List[int]], test_data_matrix: np.ndarray,
                                     test_label_ids: Dict[int, List[int]]): # to simulate online checking and offline training
@@ -48,14 +48,19 @@ class DataManager:
         else:
             user_id = user_id
         assert self.test_label_ids[user_id], f"user_id {user_id} is not valid"
+        if user_id not in self.train_label_ids:
+            self.train_label_ids[user_id] = []
 
+        pos_item_ids = self.test_label_ids[user_id]
+        neg_item_ids = [idx for idx in self.item_ids if idx not in self.train_label_ids[user_id] and idx not in self.test_label_ids[user_id]]
+        candidate_item_ids = self.retriever.sample_with_ratio(pos_item_ids=pos_item_ids, neg_item_ids=neg_item_ids)
+        session_mask = self.candidate_data_matrix[:,0] in candidate_item_ids
+        candidate_data_matrix = self.candidate_data_matrix[session_mask]
 
+        candidate_label_item_ids = list(set(self.test_label_ids[user_id] & candidate_item_ids))
+        candidate_label_attribute_ids = self._compute_label_attribute_ids(data_matrix=candidate_data_matrix, label_ids=candidate_label_item_ids)
+        return (candidate_data_matrix, candidate_label_item_ids, candidate_label_attribute_ids)
 
-        candidate_item_ids = self.test_label_ids[user_id]
-        
-
-
-    
     def reset(self, data_matrix: np.ndarray, label_ids: Dict[int, List[int]]):
         self.label_ids = label_ids
         self.session_id = 0
@@ -87,7 +92,9 @@ class DataManager:
             user_id = user_id
         assert self.label_ids[user_id], f"user_id {user_id} is not valid"
 
-        candidate_item_ids = self.retriever.sample(item_ids=self.item_ids)
+        pos_item_ids = self.label_ids[user_id]
+        neg_item_ids = [idx for idx in self.item_ids if idx not in pos_item_ids]
+        candidate_item_ids = self.retriever.sample_with_ratio(pos_item_ids=pos_item_ids, neg_item_ids=neg_item_ids)
         session_mask = self.candidate_data_matrix[:,0] in candidate_item_ids
         candidate_data_matrix = self.candidate_data_matrix[session_mask]
 
@@ -104,3 +111,12 @@ class DataManager:
             else:
                 self.label_ids[user_id] = label_ids
         self.reset()
+
+    def _compute_label_attribute_ids(self, data_matrix: np.ndarray, label_ids: List[int]): 
+        label_data_matrix = data_matrix[data_matrix[:0] in label_ids]
+        attribute_ids = [_ for _ in range(1, label_data_matrix.shape[1])]  # 1st is item_id
+        label_attribute_ids = {}
+        for attribute_id in attribute_ids:
+            attribute_dict = Counter(data_matrix[:,attribute_id])
+            label_attribute_ids.update({attribute_id: list(attribute_dict.keys())})
+        return label_attribute_ids
