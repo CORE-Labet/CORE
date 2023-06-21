@@ -18,16 +18,20 @@ class BaseRender():
     def __init__(self, template: PromptTemplate = None):
         self.template = template
     
-    def response2ids(self, response: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
+    def set_session(self, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
+        self.item_ids = item_ids
+        self.attribute_ids = attribute_ids
+    
+    def response2ids(self, response: str):
         raise NotImplementedError
     
-    def ids2response(self, query_type: str, query_id, response_ids) -> str:
+    def ids2response(self, query_type: str, query_id, response_type: str, response_id) -> str:
         raise NotImplementedError
 
     def ids2query(self, query_type: str, query_id) -> str:
         raise NotImplementedError
     
-    def query2ids(self, query: str, item_ids: List[int], attribute_ids: Dict[int, List[int]]):
+    def query2ids(self, query: str):
         raise NotImplementedError
 
 
