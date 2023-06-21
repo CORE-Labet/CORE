@@ -1,5 +1,7 @@
 import numpy as np
+
 from typing import List
+from user import QUIT_SINGAL, NOT_KNOW_SINGAL
 
 
 class DataManager:
@@ -9,10 +11,13 @@ class DataManager:
         self.attribute_ids = {}
         self.label_ids = []
     
+    def set_unique_data_map(self):
+        pass
+    
     def store_data(self, data_matrx: np.ndarray):
         self.data_matrix = data_matrx
     
-    def set_session(self, candidate_item_ids: List):
+    def set_session(self, session_id: int):
         self.label_ids = self.data_matrix[:-1]
     
     def set_turn(self, response, query_type, query_id):

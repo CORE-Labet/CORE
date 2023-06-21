@@ -7,6 +7,7 @@ from render import BaseRender
 SUCCESS_SIGNAL = "success"
 FAILURE_SIGNAL = "failure"
 QUIT_SINGAL = "quit"
+NOT_KNOW_SINGAL = "not_know"
 
 
 class UserAgent():
