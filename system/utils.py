@@ -5,11 +5,6 @@ import os
 from dataclasses import dataclass
 
 
-@dataclass
-class PromptTemplate:
-    ids2query: str
-    ids2response: str
-
 def load_openai_key(key_file: str = None):
     if not key_file:
         current_path = os.path.abspath(os.getcwd())
