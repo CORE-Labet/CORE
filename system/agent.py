@@ -1,5 +1,7 @@
 import numpy as np
 
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
 from typing import List, Dict
 from collections import Counter
 from checker import BaseChecker
@@ -10,6 +12,7 @@ from user import YES_SINGAL, NO_SINGAL, NOT_KNOW_SINGAL
 QUERY_ITEM_SIGNAL = "item"
 QUERY_ATTRIBUTE_SINGAL = "attribute"
 QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
+
 
 class ConversationalAgent():
     def __init__(self, checker: BaseChecker = None, trainer: BaseTrainer = None,
@@ -114,7 +117,15 @@ class ConversationalAgent():
         return query_id
     
     def train(self):
-        raise NotImplementedError
+        class Dataset4Train(Dataset):
+            def __init__(self) -> None:
+                super().__init__()
+    
+    def evaluate_trainer(self):
+        class Dataset4Evaluate(Dataset):
+            def __init__(self) -> None:
+                super().__init__()
+    
     
     def check_with_render(self, response: str) -> str:
         assert isinstance(self.render, BaseRender)
