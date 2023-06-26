@@ -6,22 +6,67 @@ from collections import Counter
 from retriever import BaseRetriever
 
 
-class DataManager:
+class DataManager():
     def __init__(self, retriever: BaseRetriever):
         self.label_ids = {}
         self.user_ids = []
         self.item_ids = []
         self.retriever = retriever
-
+        
+        # online checking
         self.session_id = 0
         self.turn_id = 0
         self.session2user = {}  # map from session_id to user_id
-        self.candidate_data_matrix = None
+        self.all_user_matrix, self.all_item_matrix, self.all_interaction_matrix = None, None, None
+        self.candidate_user_matrix, self.candidate_item_matrix, self.candidate_interaction_matrix = None, None, None
     
     def set_retriever(self, num_candidate_items: int = None, pos_neg_ratio: float = None):
         self.retriever.num_candidate_items = num_candidate_items if num_candidate_items else self.retriever.num_candidate_items
         self.retriever.pos_neg_ratio = pos_neg_ratio if pos_neg_ratio else self.retriever.pos_neg_ratio
     
+    def check(self):
+        assert len(self.user_ids) == self.all_user_matrix.shape[0] and len(self.item_ids) == self.all_item_matrix.shape[0]
+        assert self.all_interaction_matrix.shape[-1] == 3
+    
+    def load(self, user_matrix: np.ndarray, item_matrix: np.ndarray, interaction_matrix: np.ndarray):
+        self.all_user_matrix = user_matrix
+        self.all_item_matrix = item_matrix
+        self.all_interaction_matrix = interaction_matrix
+        
+        user_ids = user_matrix[:0].tolist()    # user_ids are stored at 1st col
+        self.user_ids = list(set(user_ids)).sort()
+        item_ids = item_matrix[:1].tolist()    # item_ids are stored at 2nd col
+        self.item_ids = list(set(item_ids)).sort()
+
+        self.label_ids = {}
+        for user_id in self.user_ids:
+            mask = (interaction_matrix[:, 0] == user_id) & (interaction_matrix[:, -1] >= 1)
+            self.label_ids[user_id] = list(set(interaction_matrix[mask][:,1].tolist()))
+        self.check()
+
+
+    def store(self, new_user_matrix: np.ndarray = None, new_item_matrix: np.ndarray = None, new_interaction_matrix: np.ndarray = None):
+        assert len(self.all_user_matrix.shape) == len(new_user_matrix.shape) and self.all_user_matrix.shape[1] == new_user_matrix.shape[1], f"new_user_matrix {new_user_matrix.shape} not match all_user_matrix {self.all_user_matrix.shape}"
+        assert len(self.all_item_matrix.shape) == len(new_item_matrix.shape) and self.all_item_matrix.shape[1] == new_item_matrix.shape[1], f"new_item_matrix {new_item_matrix.shape} not match all_item_matrix {self.all_item_matrix.shape}"
+        assert len(self.all_interaction_matrix.shape) == len(new_interaction_matrix.shape) and self.all_interaction_matrix.shape[1] == new_interaction_matrix.shape[1], f"new_interaction_matrix {new_interaction_matrix.shape} not match all_interaction_matrix {self.all_interaction_matrix.shape}"
+        self.all_user_matrix = np.stack((self.all_user_matrix, new_user_matrix), axis=0)
+        self.all_item_matrix = np.stack((self.all_user_matrix, new_user_matrix), axis=0)
+        self.all_interaction_matrix = np.stack((self.all_interaction_matrix, new_interaction_matrix), axis=0)
+        
+        user_ids = self.all_user_matrix[:0].tolist()    # user_ids are stored at 1st col
+        self.user_ids = list(set(user_ids)).sort()
+        item_ids = self.all_item_matrix[:1].tolist()    # item_ids are stored at 2nd col
+        self.item_ids = list(set(item_ids)).sort()
+        
+        self.label_ids = {}
+        for user_id in self.user_ids:
+            mask = (self.all_interaction_matrix[:, 0] == user_id) & (self.all_interaction_matrix[:, -1] >= 1)
+            self.label_ids[user_id] = list(set(self.all_interaction_matrix[mask][:,1].tolist()))
+        self.check()
+    
+    def setup4online_checker(self):
+        pass
+
     def reset4simulation(self, train_data_matrix: np.ndarray, train_label_ids: Dict[int, List[int]], test_data_matrix: np.ndarray,
                                     test_label_ids: Dict[int, List[int]]): # to simulate online checking and offline training
         self.train_label_ids = train_label_ids
@@ -100,17 +145,6 @@ class DataManager:
 
         candidate_label_item_ids = list(set(self.label_ids[user_id] & candidate_item_ids))
         return (user_id, candidate_item_ids, candidate_data_matrix, candidate_label_item_ids)
-
-    def store(self, new_data_matrix: np.ndarray, new_label_ids: Dict[int, List[int]]):
-        assert len(new_data_matrix.shape) == len(self.data_matrix.shape) and new_data_matrix.shape[1] == self.data_matrix.shape[1], f"new_data_matrix {new_data_matrix.shape} not match data_matrix {self.data_matrix.shape}"
-        self.data_matrix = np.stack((self.data_matrix, new_data_matrix), axis=0)
-        
-        for user_id, label_ids in new_label_ids.items():
-            if user_id in self.label_ids:
-                self.label_ids[user_id].extend(label_ids)
-            else:
-                self.label_ids[user_id] = label_ids
-        self.reset()
 
     def _compute_label_attribute_ids(self, data_matrix: np.ndarray, label_ids: List[int]): 
         label_data_matrix = data_matrix[data_matrix[:0] in label_ids]
