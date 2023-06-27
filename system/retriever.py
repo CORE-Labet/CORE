@@ -18,7 +18,7 @@ class BaseRetriever:
 
 class TimeRetriever(BaseRetriever):
     def __init__(self, num_candidate_items: int = 30, pos_neg_ratio: float = 0.1):
-        super().__init__(num_candidate_items=num_candidate_items)
+        super().__init__(num_candidate_items=num_candidate_items, pos_neg_ratio=pos_neg_ratio)
     
     def sample(self, item_ids: List[int]) -> List[int]:
         assert len(item_ids) >= self.num_candidate_items
@@ -39,8 +39,8 @@ class TimeRetriever(BaseRetriever):
 
 
 class RandomRetriever(BaseRetriever):
-    def __init__(self, num_candidate_items: int = 30):
-        super().__init__(num_candidate_items=num_candidate_items)
+    def __init__(self, num_candidate_items: int = 30, pos_neg_ratio: float = 0.1):
+        super().__init__(num_candidate_items=num_candidate_items, pos_neg_ratio=pos_neg_ratio)
     
     def sample(self, item_ids: List[int]) -> List[int]:
         assert len(item_ids) >= self.num_candidate_items

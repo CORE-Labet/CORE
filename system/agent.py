@@ -1,7 +1,5 @@
 import numpy as np
 
-from torch.utils.data import DataLoader
-from torch.utils.data import Dataset
 from typing import List, Dict
 from collections import Counter
 from checker import BaseChecker
@@ -15,8 +13,7 @@ QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
 
 
 class ConversationalAgent():
-    def __init__(self, checker: BaseChecker = None, trainer: BaseTrainer = None,
-                    render: BaseRender = None, cold_start: bool = True):
+    def __init__(self, checker: BaseChecker, trainer: BaseTrainer, render: BaseRender, cold_start: bool = True):
         self.checker = checker
         self.trainer = trainer
         self.render = render
@@ -117,15 +114,7 @@ class ConversationalAgent():
         return query_id
     
     def train(self):
-        class Dataset4Train(Dataset):
-            def __init__(self) -> None:
-                super().__init__()
-    
-    def evaluate_trainer(self):
-        class Dataset4Evaluate(Dataset):
-            def __init__(self) -> None:
-                super().__init__()
-    
+        raise NotImplementedError  
     
     def check_with_render(self, response: str) -> str:
         assert isinstance(self.render, BaseRender)
