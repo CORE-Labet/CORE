@@ -1,11 +1,15 @@
 import numpy as np
+import torch
 
-from typing import List, Dict
+from tqdm import tqdm
+from sklearn.metrics import roc_auc_score
+from torch.utils.data import Dataset, DataLoader
+from typing import List
 from collections import Counter
 from checker import BaseChecker
 from trainer import BaseTrainer
 from render import BaseRender
-from user import YES_SINGAL, NO_SINGAL, NOT_KNOW_SINGAL
+from user import NOT_KNOW_SINGAL
 
 QUERY_ITEM_SIGNAL = "item"
 QUERY_ATTRIBUTE_SINGAL = "attribute"
@@ -113,9 +117,59 @@ class ConversationalAgent():
         assert query_type is QUERY_ITEM_SIGNAL, f"during evaluation, query type {query_type} must be {QUERY_ITEM_SIGNAL}"
         return query_id
     
-    def train(self):
-        raise NotImplementedError  
+    def load(self, args):
+        self.trainer.load_state_dict(torch.load(args.save_dir, map_location=args.device))
     
+    @staticmethod
+    def _evaluate_with_criterion(y_, y, criterion, threshold: float = 0.5):
+        loss = criterion(y_, y)
+        acc = torch.mean(torch.eq(y_ >= threshold, y), dtype=torch.float).item()
+        y_, y = [_.view(-1).detach().cpu().numpy() for _ in (y_, y)]
+        return (loss, acc, roc_auc_score(y_true=y, y_score=y_))
+    
+    def _train_trainer(self, args, dataloader, optimizer, scheduler, criterion):
+        self.trainer.train()
+        for data in tqdm(dataloader):
+            data = [_.to(args.device, non_blocking=True) for _ in data]
+            x, y = data
+            y_ = self.trainer(x, y.shape[1])
+            loss, acc, auc = self._evaluate_with_criterion(y_=y_, y=y, criterion=criterion)
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.trainer.parameters(), max_norm=20, norm_type=2)
+            optimizer.step()
+            scheduler.step(auc)
+
+    def _evaluate_trainer(self, args, dataloader, criterion):
+        self.trainer.eval()
+        res = []
+        with torch.no_grad():
+            for data in tqdm(dataloader):
+                x, y = data
+                x = x.to(args.device)
+                y_ = self.trainer(x, y.shape[1])
+                res.append((y_.cpu(), y))
+        res = [torch.cat(_) for _ in list(zip(*res))]
+        loss, acc, auc = self._evaluate_with_criterion(*res, criterion=criterion)
+        return (loss, acc, auc)
+
+    def train(self, args, dataset: Dataset):
+        optimizer = torch.optim.AdamW(self.trainer.parameters(), lr=args.lr, weight_decay=args.l2_reg)
+        criterion = torch.nn.BCELoss()
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="max", factor=0.9, 
+                            patience=len(dataset)//(args.batch_size*5), verbose=True, min_lr=args.min_lr)
+        dataloader = DataLoader(dataset=dataset)
+        
+        best_auc = 0
+        for _ in range(args.epochs):
+            self._train_trainer(args=args, dataloader=dataloader, optimizer=optimizer, scheduler=scheduler, criterion=criterion)
+            res = self._evaluate_trainer(args=args, dataloader=dataloader, criterion=criterion)
+            auc = res[-1]
+            if auc > best_auc:
+                best_auc = auc
+                torch.save(self.trainer.state_dict(), args.save_path)
+        return best_auc
+
     def check_with_render(self, response: str) -> str:
         assert isinstance(self.render, BaseRender)
         item_ids, attribute_ids = self.render.response2ids(response=response)

@@ -13,7 +13,7 @@ from retriever import TimeRetriever, RandomRetriever
 from checker import ItemChecker, AttributeChecker, CoreChecker
 from render import RuleRender, LMRender
 
-from user import QUIT_SINGAL, YES_SINGAL, NO_SINGAL
+from user import QUIT_SINGAL, YES_SINGAL
 
 logging.basicConfig(level=logging.INFO)
 
@@ -74,10 +74,10 @@ def load_checker(args):
     return checker
 
 
-def load_trainer(args):
+def load_trainer(args, num_feat):
     if args.trainer in ["fm", "deepfm", "pnn", "esmm", "esmm2", "mmoe"]:
         trainer = TowerTrainer(
-            num_feat=args.num_feat,
+            num_feat=num_feat,
             input_size=args.input_size,
             hidden_sizes=args.pre_hidden_sizes,
             dropout=args.dropout,
@@ -85,7 +85,7 @@ def load_trainer(args):
         )
     elif args.trainer in ["lstm", "gru", "din"]:
         trainer = SequenceTrainer(
-            num_feat=args.num_feat,
+            num_feat=num_feat,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
             pre_hidden_sizes=args.pre_hidden_sizes,
@@ -97,7 +97,7 @@ def load_trainer(args):
     return trainer
 
 
-def evaluate_offline_trainer():
+def evaluate_offline_trainer(args):
     pass
 
 def evaluate_online_checker(args):
