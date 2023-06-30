@@ -1,5 +1,7 @@
 import numpy as np
 import random
+import os
+import pickle
 
 from torch.utils.data import Dataset
 from typing import List, Dict
@@ -8,12 +10,20 @@ from retriever import BaseRetriever
 
 
 class DataManager():
-    def __init__(self, retriever: BaseRetriever):
+    def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None):
+        self.data_name = data_name
+        if not data_path:
+            assert data_name, "at least one of data_path and data_name should be vaild"
+            current_path = os.path.abspath(os.getcwd())
+            self.data_path = os.path.join(os.path.dirname(current_path), "data/")
+        else:
+            self.data_path = data_path  # text data storage
+        
         self.label_ids = {}
         self.user_ids = []
         self.item_ids = []
         self.retriever = retriever
-        
+
         # online checking
         self.session_id = 0
         self.session2user = {}  # map from session_id to user_id
@@ -25,9 +35,6 @@ class DataManager():
         self.retriever.pos_neg_ratio = pos_neg_ratio if pos_neg_ratio else self.retriever.pos_neg_ratio
     
     def check(self):
-        assert len(self.user_ids) == self.all_user_matrix.shape[0] and len(self.item_ids) == self.all_item_matrix.shape[0]
-        assert self.all_interaction_matrix.shape[-1] == 3
-
         # use the lastest feature matrix of user_id and item_id to represent
         user_id_col = self.all_user_matrix[:,0]
         unique_mask = np.unique(user_id_col, return_index=True)[1]
@@ -36,20 +43,34 @@ class DataManager():
         item_id_col = self.all_item_matrix[:,0] 
         unique_mask = np.unique(item_id_col, return_index=True)[1] 
         self.all_item_matrix = self.all_item_matrix[unique_mask]
+
+        assert len(self.user_ids) == self.all_user_matrix.shape[0] and len(self.item_ids) == self.all_item_matrix.shape[0]
+        assert self.all_interaction_matrix.shape[-1] == 3
     
-    def load(self, user_matrix: np.ndarray, item_matrix: np.ndarray, interaction_matrix: np.ndarray):
+    def get_num_feat(self):
+        # num_feat = len(user_ids) + len(item_ids), embedding rows
+        return self.all_user_matrix.shape[0] + self.all_item_matrix.shape[0]
+    
+    def load(self, user_matrix: np.ndarray = None, item_matrix: np.ndarray = None, interaction_matrix: np.ndarray = None):
+        if not (user_matrix and item_matrix and interaction_matrix):
+            assert os.path.exists(os.path.join(self.data_path, f"{self.data_name}.pickle")), f"load data from file {self.data_path}" + f"{self.data_name}.pickle"
+            with open(os.path.join(self.data_path, f"{self.data_name}.pickle"), "rb") as f:   
+                user_matrix, item_matrix, interaction_matrix = pickle.load(f)
+
         self.all_user_matrix = user_matrix
         self.all_item_matrix = item_matrix
         self.all_interaction_matrix = interaction_matrix
         
-        user_ids = user_matrix[:0].tolist()    # user_ids are stored at 1st col
-        self.user_ids = list(set(user_ids)).sort()
-        item_ids = item_matrix[:1].tolist()    # item_ids are stored at 2nd col
-        self.item_ids = list(set(item_ids)).sort()
+        user_ids = user_matrix[:,0].tolist()    # user_ids are stored at 1st col
+        self.user_ids = list(set(user_ids))
+        self.user_ids.sort()
+        item_ids = item_matrix[:,0].tolist()    # item_ids are stored at 2nd col
+        self.item_ids = list(set(item_ids))
+        self.item_ids.sort()
 
         self.label_ids = {}
         for user_id in self.user_ids:
-            mask = (interaction_matrix[:, 0] == user_id) & (interaction_matrix[:, -1] >= 1)
+            mask = (interaction_matrix[:,0] == user_id) & (interaction_matrix[:,-1] >= 1)
             self.label_ids[user_id] = list(set(interaction_matrix[mask][:,1].tolist()))
         self.check()
 
@@ -57,13 +78,15 @@ class DataManager():
         if new_user_matrix:
             assert len(self.all_user_matrix.shape) == len(new_user_matrix.shape) and self.all_user_matrix.shape[1] == new_user_matrix.shape[1], f"new_user_matrix {new_user_matrix.shape} not match all_user_matrix {self.all_user_matrix.shape}"
             self.all_user_matrix = np.stack((self.all_user_matrix, new_user_matrix), axis=0)
-            user_ids = self.all_user_matrix[:0].tolist()    # user_ids are stored at 1st col
-            self.user_ids = list(set(user_ids)).sort()
+            user_ids = self.all_user_matrix[:,0].tolist()    # user_ids are stored at 1st col
+            self.user_ids = list(set(user_ids))
+            self.user_ids.sort()
         if new_item_matrix:
             assert len(self.all_item_matrix.shape) == len(new_item_matrix.shape) and self.all_item_matrix.shape[1] == new_item_matrix.shape[1], f"new_item_matrix {new_item_matrix.shape} not match all_item_matrix {self.all_item_matrix.shape}"
             self.all_item_matrix = np.stack((self.all_user_matrix, new_user_matrix), axis=0)
-            item_ids = self.all_item_matrix[:1].tolist()    # item_ids are stored at 2nd col
-            self.item_ids = list(set(item_ids)).sort()
+            item_ids = self.all_item_matrix[:,1].tolist()    # item_ids are stored at 2nd col
+            self.item_ids = list(set(item_ids))
+            self.item_ids.sort()
         
         if new_interaction_matrix:
             assert len(self.all_interaction_matrix.shape) == len(new_interaction_matrix.shape) and self.all_interaction_matrix.shape[1] == new_interaction_matrix.shape[1], f"new_interaction_matrix {new_interaction_matrix.shape} not match all_interaction_matrix {self.all_interaction_matrix.shape}"
@@ -71,12 +94,20 @@ class DataManager():
         
             self.label_ids = {}
             for user_id in self.user_ids:
-                mask = (self.all_interaction_matrix[:, 0] == user_id) & (self.all_interaction_matrix[:, -1] >= 1)
+                mask = (self.all_interaction_matrix[:,0] == user_id) & (self.all_interaction_matrix[:,-1] >= 1)
                 self.label_ids[user_id] = list(set(self.all_interaction_matrix[mask][:,1].tolist()))
         
         if new_user_matrix or new_item_matrix or new_interaction_matrix:
             self.check()
     
+    def save(self):
+        if not os.path.exists(self.data_path):
+            os.makedirs(self.data_path, exist_ok=True)
+        
+        data_path = os.path.join(self.data_path, f"{self.data_name}.pickle")
+        with open(data_path, "wb") as f:
+            pickle.dump((self.all_user_matrix, self.all_item_matrix, self.all_interaction_matrix), f)
+
     def set_online_checker(self, online_label_ids: Dict[int, List[int]] = None, split_ratio: float = 0.8):
         if online_label_ids:
             candidate_user_ids = list(online_label_ids.keys())
@@ -107,6 +138,7 @@ class DataManager():
         class Dataset4Train(Dataset):
             def __init__(self) -> None:
                 super().__init__()
+        
 
     def set_session(self, user_id: int = None, enable_overlap: bool = False):   # to simulate online checking and offline training
         assert self.online_user_ids and self.user_ids and self.item_ids and self.label_ids, "load data and setup online checker first"
@@ -143,3 +175,11 @@ class DataManager():
             attribute_dict = Counter(data_matrix[:,attribute_id])
             label_attribute_ids.update({attribute_id: list(attribute_dict.keys())})
         return label_attribute_ids
+
+
+
+
+# ===== DEBUG =====
+if __name__ == "__main__":
+    manager = DataManager(data_name="taobao")
+    manager.load()
