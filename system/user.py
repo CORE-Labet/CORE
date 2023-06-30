@@ -26,6 +26,18 @@ class UserAgent():
         # label_ids: a list of all the positive item ids in session
         self.label_item_ids = label_item_ids
         self.label_attribute_ids = label_attribute_ids
+
+        self._sort()    # for convenience to debug
+    
+    def _sort(self):
+        self.label_item_ids.sort()
+        
+        self.label_attribute_ids = dict(sorted(self.label_attribute_ids.items(), key=lambda x: x[0]))
+        for attribute_vals in self.label_attribute_ids.values():
+            attribute_vals.sort()
+
+        print("LABEL ITEMS: ", self.label_item_ids)
+        print("LABEL ATTRIBUTES: ", self.label_attribute_ids)
     
     def _reponse_item(self, query_item_ids: List[int]):
         for query_item_id in query_item_ids:
@@ -44,23 +56,26 @@ class UserAgent():
     
     def _reponse_attribute_value(self, query_attribute_id: int, query_attribute_vals: List[int]):
         label_attribute_values = self.label_attribute_ids[query_attribute_id]
-        return list(set(label_attribute_values) & set(query_attribute_vals))
+        if set(label_attribute_values) & set(query_attribute_vals):
+            return label_attribute_values
+        else:
+            return []
 
     def response(self, query_type: str, query_id):
         if self.enable_quit:
             if self.turn_id > self.max_turn:
                 return QUIT_SINGAL
         self.turn_id += 1
-        if query_type is QUERY_ITEM_SIGNAL:
+        if query_type == QUERY_ITEM_SIGNAL:
             assert isinstance(query_id, List)
             return self._reponse_item(query_item_ids=query_id)
-        elif query_type is QUERY_ATTRIBUTE_SINGAL:
+        elif query_type == QUERY_ATTRIBUTE_SINGAL:
             assert isinstance(query_id, int)
             if self.enable_not_know:
                 return self._reponse_attribute_with_not_know(query_attribute_id=query_id)
             else:
                 return self._reponse_attribute(query_attribute_id=query_id)
-        elif query_type is QUERY_ATTRIBUTE_VAL_SIGNAL:
+        elif query_type == QUERY_ATTRIBUTE_VAL_SIGNAL:
             query_attribute_id, query_attribute_vals = query_id
             return self._reponse_attribute_value(query_attribute_id=query_attribute_id, query_attribute_vals=query_attribute_vals)
         else:

@@ -176,13 +176,5 @@ class DataManager():
         for attribute_id in attribute_ids:
             attribute_dict = Counter(label_data_matrix[:,attribute_id])
             label_attribute_ids.update({attribute_id: list(attribute_dict.keys())})
-            
+
         return label_attribute_ids
-
-
-
-
-# ===== DEBUG =====
-if __name__ == "__main__":
-    manager = DataManager(data_name="taobao")
-    manager.load()

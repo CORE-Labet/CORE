@@ -40,7 +40,7 @@ class ConversationalAgent():
         
         self.data_matrix = np.concatenate((data_matrix, predictions), axis=1)
 
-        self.item_ids = data_matrix[:,0].tolist()
+        self.item_ids = data_matrix[:,0].astype(int).tolist()
         self.attribute_ids = {} 
         attribute_ids = [_ for _ in range(1, self.data_matrix.shape[1] - 1)]  # 1st is item_id, last col is label
         for attribute_id in attribute_ids:
@@ -53,6 +53,9 @@ class ConversationalAgent():
         self.checked_attribute_ids = {}
     
     def set_turn(self, query_type: str, query_id, response):
+        print("TYPE: ", query_type)
+        print("ID: ", query_id)
+        print("RESPONSE: ", response)
         self.turn_id += 1
         if query_type == QUERY_ITEM_SIGNAL:
             assert response == NO_SINGAL
@@ -76,13 +79,19 @@ class ConversationalAgent():
 
     def _sort(self):
         self.checked_item_ids.sort()
+        self.item_ids.sort()
         
         self.checked_attribute_ids = dict(sorted(self.checked_attribute_ids.items(), key=lambda x: x[0]))
         for attribute_vals in self.checked_attribute_ids.values():
             attribute_vals.sort()
+        self.attribute_ids = dict(sorted(self.attribute_ids.items(), key=lambda x: x[0]))
+        for attribute_vals in self.attribute_ids.values():
+            attribute_vals.sort()
         
         print("CHECKED ITEM IDS: ", self.checked_item_ids)
         print("CHECKED ATTRIBUTE_IDS: ", self.checked_attribute_ids)
+        print("ITEM IDS: ", self.item_ids)
+        print("ATTRIBUTE IDS: ", self.attribute_ids)
         
     def _update_item(self, query_item_ids: List[int]):
         self.checked_item_ids.extend(query_item_ids)
@@ -93,24 +102,34 @@ class ConversationalAgent():
     def _update_attribute(self, query_attribute_id: int, response_vals: List[int]):
         self.checked_attribute_ids.update({query_attribute_id: self.attribute_ids[query_attribute_id]})
         self.attribute_ids.pop(query_attribute_id) 
- 
-        label_data_matrix = self.data_matrix[self.data_matrix[:,query_attribute_id] in response_vals]
-        label_item_ids = label_data_matrix[:,0].tolist()
+
+        label_mask = np.isin(self.data_matrix[:,query_attribute_id], response_vals)
+        label_data_matrix = self.data_matrix[label_mask]
+        label_item_ids = label_data_matrix[:,0].astype(int).tolist()
         self.checked_item_ids.extend([idx for idx in self.item_ids if idx not in label_item_ids])
         self.item_ids = list(set(self.item_ids) & set(label_item_ids))
     
     def _update_attribute_val(self, query_attribute_id: int, query_attribute_vals: List[int], response_vals: List[int]):
-        self.checked_attribute_ids.update({query_attribute_id: query_attribute_vals})
-        if self.attribute_ids[query_attribute_id] == query_attribute_vals:
-            self.attribute_ids.pop(query_attribute_id)
+        if response_vals:   # if receive yes, stop further querying the attribute id
+            self.checked_attribute_ids.update({query_attribute_id: self.attribute_ids[query_attribute_id]})
+            self.attribute_ids.pop(query_attribute_id) 
+            label_mask = np.isin(self.data_matrix[:,query_attribute_id], response_vals)
+            label_data_matrix = self.data_matrix[label_mask]
+            label_item_ids = label_data_matrix[:,0].astype(int).tolist()
+            
+            self.checked_item_ids.extend([idx for idx in self.item_ids if idx not in label_item_ids])
+            self.item_ids = list(set(self.item_ids) & set(label_item_ids))
         else:
-            self.attribute_ids[query_attribute_id] = [idx for idx in self.attribute_ids[query_attribute_id] if idx not in query_attribute_vals]
-        
-        label_data_matrix = self.data_matrix[self.data_matrix[:,query_attribute_id] in response_vals]
-        label_item_ids = label_data_matrix[:,0].tolist()
-        self.checked_item_ids.extend([idx for idx in self.item_ids if idx not in label_item_ids])
-        self.item_ids = list(set(self.item_ids) & set(label_item_ids))
+            if query_attribute_id in self.checked_attribute_ids:
+                self.checked_attribute_ids[query_attribute_id].extend(query_attribute_vals)
+            else:
+                self.checked_attribute_ids[query_attribute_id] = query_attribute_vals
 
+            if self.attribute_ids[query_attribute_id] == query_attribute_vals:
+                self.attribute_ids.pop(query_attribute_id)
+            else:
+                self.attribute_ids[query_attribute_id] = [idx for idx in self.attribute_ids[query_attribute_id] if idx not in query_attribute_vals]
+            
     def check(self):
         return self.checker.act(data_matrix=self.data_matrix, item_ids=self.item_ids, attribute_ids=self.attribute_ids, turn_id=self.turn_id)  
     

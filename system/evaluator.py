@@ -45,7 +45,6 @@ def load_retriever(args):
         raise NotImplementedError
     return retriever
 
-
 def load_checker(args):
     if args.checker == "item":
         checker = ItemChecker(
@@ -71,7 +70,6 @@ def load_checker(args):
         raise NotImplementedError
     return checker
 
-
 def load_trainer(args, num_feat):
     if args.trainer in ["fm", "deepfm", "pnn", "esmm", "esmm2", "mmoe"]:
         trainer = TowerTrainer(
@@ -93,7 +91,6 @@ def load_trainer(args, num_feat):
     else:
         raise NotImplementedError
     return trainer
-
 
 def evaluate_offline_trainer(args):
     pass
@@ -149,6 +146,9 @@ def evaluate_online_checker(args):
         if not is_stop:
             query_id = conversational_agent.evaluate()
             response = user_agent.evaluate(query_id)
+            print("===== EVALUATE =====")
+            print("ID: ", query_id)
+            print("RESPONSE: ", response)
             if response is YES_SINGAL:
                 num_turn.append(args.num_turn)
                 success_rate.append(1)

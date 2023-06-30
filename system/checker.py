@@ -64,9 +64,9 @@ class AttributeChecker(BaseChecker):
                 entro += - (value / sum_value) * np.log2(value / sum_value)
             entros.append(entro)
         max_attribute_id = list(attribute_ids.keys())[entros.index(max(entros))]
-
+        
         if self.query_attribute_val:
-            random_attribute_values = random.choice(attribute_ids[max_attribute_id], k=self.n_attribute_val)     # randomly select a value
+            random_attribute_values = random.choices(attribute_ids[max_attribute_id], k=self.n_attribute_val)     # randomly select a value
             return (QUERY_ATTRIBUTE_VAL_SIGNAL, (max_attribute_id, random_attribute_values))
         else:
             return (QUERY_ATTRIBUTE_SINGAL, max_attribute_id)
@@ -95,9 +95,11 @@ class CoreChecker(BaseChecker):
         sum_score = data_matrix[:,-1].sum()
         cert_gains = []
         for item_id in item_ids:
-            prob = data_matrix[item_id][-1] / sum_score
-            cert = (1 - prob) * data_matrix[item_id][-1] + prob * sum_score
+            score = np.squeeze(data_matrix[data_matrix[:,0]==item_id])[-1]
+            prob = score / sum_score
+            cert = (1 - prob) * score + prob * sum_score
             cert_gains.append(cert)
+
         score_dict = dict(zip(item_ids, cert_gains))
         score_dict = dict(sorted(score_dict.items(), key=lambda x: x[1], reverse=True))
         
@@ -105,7 +107,7 @@ class CoreChecker(BaseChecker):
         max_cert = sum(list(score_dict.values())[:self.n_items])
         return (max_item_ids, max_cert)
 
-    def _calculate_attribute(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List]):
+    def _calculate_attribute(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List[int]]):
         sum_score = data_matrix[:,-1].sum()
         cert_gains = []
         for attribute_id in attribute_ids.keys():
@@ -119,29 +121,28 @@ class CoreChecker(BaseChecker):
                 cert += prob * value_score + (1 - prob) * (sum_score - value_score)
             cert_gains.append(cert)
         max_cert = max(cert_gains)
-        max_attribute_id = attribute_ids[cert_gains.index(max_cert)].keys()
+        max_attribute_id = list(attribute_ids.keys())[cert_gains.index(max_cert)]
         return (max_attribute_id, max_cert)
 
     def _calculate_attribute_with_dependence(self):
         raise NotImplementedError
     
-    def _calculate_attribute_val(self, data_matrix: np.ndarray, attribute_ids: List[Dict[int, List]]):
+    def _calculate_attribute_val(self, data_matrix: np.ndarray, attribute_ids: Dict[int, List[int]]):
         sum_score = data_matrix[:,-1].sum()
         cert_gains = {} # include attribute_id: gain of querying each attribute id (sum of top-n_attribute_vals)
         attribute_vals = {} # include attribute_id: top-n_attribute_vals attribute vals of attribute id
-        for attribute_id in attribute_ids:
-            vals, cert = [], []
-            for value in attribute_id:
-                value_mask = data_matrix[:,attribute_id.keys()] != value # select items not equal to value
+        for attribute_id in attribute_ids.keys():
+            cert = []
+            for attribute_val in attribute_ids[attribute_id]:
+                value_mask = data_matrix[:,attribute_id] != attribute_val # select items not equal to value
                 value_score = data_matrix[value_mask][:,-1].sum()
                 prob = 1 - value_score / sum_score
                 cert.append(prob * value_score + (1 - prob) * (sum_score - value_score)) 
-                vals.append(value)
-            cert_dict = dict(zip(vals, cert))
+            cert_dict = dict(zip(attribute_ids[attribute_id], cert))
             cert_dict = dict(sorted(cert_dict.items(), key=lambda x: x[1], reverse=True))
-            cert_gains.update({attribute_id: sum(cert_dict.values()[:self.n_attribute_val])})
-            attribute_vals.update({attribute_id: cert_dict.keys()[:self.n_attribute_val]})
-        
+            cert_gains.update({attribute_id: sum(list(cert_dict.values())[:self.n_attribute_val])})
+            attribute_vals.update({attribute_id: list(cert_dict.keys())[:self.n_attribute_val]})
+
         max_attribute_id = max(cert_gains, key=cert_gains.get)
         max_cert = cert_gains[max_attribute_id]
         max_attribute_vals = attribute_vals[max_attribute_id]
