@@ -160,20 +160,23 @@ class DataManager():
         pos_item_ids = self.label_ids[user_id]
         neg_item_ids = [idx for idx in self.item_ids if idx not in pos_item_ids]
         candidate_item_ids = self.retriever.sample_with_ratio(pos_item_ids=pos_item_ids, neg_item_ids=neg_item_ids)
-        session_mask = self.candidate_data_matrix[:,0] in candidate_item_ids
-        candidate_data_matrix = self.candidate_data_matrix[session_mask]
+        session_mask = np.isin(self.all_item_matrix[:, 0], candidate_item_ids)
+        candidate_item_matrix = self.all_item_matrix[session_mask]
 
-        candidate_label_item_ids = list(set(self.label_ids[user_id] & candidate_item_ids))
-        candidate_label_attribute_ids = self._compute_label_attribute_ids(data_matrix=candidate_data_matrix, label_ids=candidate_label_item_ids)
-        return (candidate_data_matrix, candidate_label_item_ids, candidate_label_attribute_ids)
+        candidate_label_item_ids = list(set(self.label_ids[user_id]) & set(candidate_item_ids))
+        candidate_label_attribute_ids = self._compute_label_attribute_ids(data_matrix=candidate_item_matrix, label_ids=candidate_label_item_ids)
+        return (candidate_item_matrix, candidate_label_item_ids, candidate_label_attribute_ids)
 
     def _compute_label_attribute_ids(self, data_matrix: np.ndarray, label_ids: List[int]): 
-        label_data_matrix = data_matrix[data_matrix[:0] in label_ids]
+        label_mask = np.isin(data_matrix[:,0], label_ids)
+        label_data_matrix = data_matrix[label_mask]
         attribute_ids = [_ for _ in range(1, label_data_matrix.shape[1])]  # 1st is item_id
+
         label_attribute_ids = {}
         for attribute_id in attribute_ids:
-            attribute_dict = Counter(data_matrix[:,attribute_id])
+            attribute_dict = Counter(label_data_matrix[:,attribute_id])
             label_attribute_ids.update({attribute_id: list(attribute_dict.keys())})
+            
         return label_attribute_ids
 
 

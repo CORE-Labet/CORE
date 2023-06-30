@@ -78,12 +78,12 @@ class MMoE(nn.Module):
 
 class FM(nn.Module):
     def __init__(self, w_dim: int = 0, v_dim: int = 0, w1: nn.Embedding = None, v: nn.Embedding =None, 
-                    point_dot: bool = False, feature_num: int = 0, weight: float = 0.5):
+                    point_dot: bool = False, num_feat: int = 0, weight: float = 0.5):
         super(FM, self).__init__()
         self.W0 = nn.Parameter(torch.randn(1))
         self.W1 = w1 if w1 else nn.Embedding(w_dim, 1)  # for linear part
         self.V = v if v else nn.Embedding(w_dim, v_dim) # for product part
-        self.F = nn.Parameter(torch.randn(feature_num, self.V.weight.shape[1])) if feature_num > 0 else None
+        self.F = nn.Parameter(torch.randn(num_feat, self.V.weight.shape[1])) if num_feat > 0 else None
 
         self.point_dot = point_dot
         self.weight = weight

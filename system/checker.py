@@ -17,7 +17,9 @@ class BaseChecker():
         self.query_item_only = query_item_only
     
     def _sort_item(self, data_matrix: np.ndarray, item_ids: List[int]):
-        score_dict = dict(zip(item_ids, data_matrix[item_ids,-1].tolist()))
+        turn_mask = np.isin(data_matrix[:,0], item_ids)  # only include item_ids
+        data_matrix = data_matrix[turn_mask]
+        score_dict = dict(zip(item_ids, data_matrix[:,-1].tolist()))
         score_dict = dict(sorted(score_dict.items(), key=lambda x: x[1], reverse=True))
         return list(score_dict.keys())
 
@@ -34,13 +36,14 @@ class ItemChecker(BaseChecker):
         super().__init__(n_items=n_items, n_attribute_val=n_attribute_val, query_attribute_val=query_attribute_val, 
                             query_attribute_only=query_attribute_only, query_item_only=query_item_only)
 
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]], num_turn: int = 0):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]], turn_id: int = 0):
         assert not self.query_attribute_only
         sorted_items = self._sort_item(data_matrix=data_matrix, item_ids=item_ids)
         return (QUERY_ITEM_SIGNAL, sorted_items[:self.n_items])
 
     def evaluate(self, data_matrix: np.ndarray, item_ids: List[int]):
-        self.act(data_matrix=data_matrix, item_ids=item_ids)
+        sorted_items = self._sort_item(data_matrix=data_matrix, item_ids=item_ids)
+        return (QUERY_ITEM_SIGNAL, sorted_items[:self.n_items])
 
 
 class AttributeChecker(BaseChecker):

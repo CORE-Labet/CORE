@@ -29,7 +29,7 @@ class UserAgent():
     
     def _reponse_item(self, query_item_ids: List[int]):
         for query_item_id in query_item_ids:
-            if query_item_id in self.label_ids:
+            if query_item_id in self.label_item_ids:
                 return YES_SINGAL
         return NO_SINGAL
     
@@ -51,16 +51,15 @@ class UserAgent():
             if self.turn_id > self.max_turn:
                 return QUIT_SINGAL
         self.turn_id += 1
-        
         if query_type is QUERY_ITEM_SIGNAL:
             assert isinstance(query_id, List)
-            return self._reponse_item(query_id=query_id)
+            return self._reponse_item(query_item_ids=query_id)
         elif query_type is QUERY_ATTRIBUTE_SINGAL:
             assert isinstance(query_id, int)
             if self.enable_not_know:
-                return self._reponse_attribute_with_not_know(query_id=query_id)
+                return self._reponse_attribute_with_not_know(query_attribute_id=query_id)
             else:
-                return self._reponse_attribute(query_id=query_id)
+                return self._reponse_attribute(query_attribute_id=query_id)
         elif query_type is QUERY_ATTRIBUTE_VAL_SIGNAL:
             query_attribute_id, query_attribute_vals = query_id
             return self._reponse_attribute_value(query_attribute_id=query_attribute_id, query_attribute_vals=query_attribute_vals)
@@ -70,7 +69,7 @@ class UserAgent():
     
     def evaluate(self, query_item_ids: List[int]):
         for query_item_id in query_item_ids:
-            if query_item_id in self.label_ids:
+            if query_item_id in self.label_item_ids:
                 return YES_SINGAL
         return NO_SINGAL
     

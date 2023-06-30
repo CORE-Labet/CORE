@@ -44,6 +44,8 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", help="name of dataset", default="taobao", choices=["taobao", "tmall", "alipay", "amazon", "movielen"])
     parser.add_argument("--split_ratio", help="split ratio of splitting dataset into training and test datasets", default=0.8, type=float)
     parser.add_argument("--num_session", help="number of sessions", default=4, type=int)
+    parser.add_argument("--num_turn", help="number of turns per session", default=4, type=int)
+    parser.add_argument("--failure_penalty", help="penlty of number of turns for each session", default=3, type=int)
 
     parser.add_argument("--retriever", help="name of retriever", default="random", choices=["time", "random"])
     parser.add_argument("--candidate_items", help="number of candidate items per session", default=30, type=int)

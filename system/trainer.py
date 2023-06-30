@@ -8,7 +8,7 @@ from base import MLP, BatchNormTrans, FM, DeepFM, PNN, ESMM, ESMM2, MMoE, DIN
 
 class BaseTrainer(nn.Module):
     def __init__(self, num_feat: int, input_size: int):
-        super.__init__()
+        super(BaseTrainer, self).__init__()
         self.embedding = nn.Embedding(num_feat, input_size)
         self.model = None
         self.requires_mlp = True
@@ -23,9 +23,9 @@ class BaseTrainer(nn.Module):
 class TowerTrainer(BaseTrainer):
     def __init__(self, num_feat: int, input_size: int, hidden_sizes: List[int], 
                     dropout: float = 0.5, model_name: str = "fm"): 
-        super(BaseTrainer, self).__init__(num_feat=num_feat, input_size=input_size)
+        super().__init__(num_feat=num_feat, input_size=input_size)
         self.model_name = model_name
-        self.mlp = MLP(in_channels=input_size, hidden_sizes=hidden_sizes, norm_layer=BatchNormTrans, dropout=dropout)
+        self.mlp = MLP(input_size=input_size, hidden_sizes=hidden_sizes, norm_layer=BatchNormTrans, dropout=dropout)
         self.model = self._load_model(model_name = model_name, input_size=input_size, hidden_sizes=hidden_sizes, 
                                         num_feat=num_feat, dropout=dropout)
     
@@ -82,7 +82,7 @@ class TowerTrainer(BaseTrainer):
 class SequenceTrainer(BaseTrainer):
     def __init__(self, num_feat: int, input_size: int, hidden_size: int, 
                     pre_hidden_sizes: List[int], dropout: float = 0.5, model_name: str = "lstm"): 
-        super(BaseTrainer, self).__init__(num_feat=num_feat, input_size=input_size)
+        super().__init__(num_feat=num_feat, input_size=input_size)
         self.mlp = MLP(input_size=hidden_size, hidden_sizes=pre_hidden_sizes, norm_layer=BatchNormTrans, dropout=dropout)
         self.model = self._load_model(model_name=model_name, input_size=input_size, dropout=dropout)
     
@@ -107,5 +107,5 @@ class SequenceTrainer(BaseTrainer):
 
 class GraphTrainer(BaseTrainer):
     def __init__(self, num_feat: int, input_size: int):
-        super(BaseTrainer, self).__init__(num_feat=num_feat, input_size=input_size)
+        super().__init__(num_feat=num_feat, input_size=input_size)
         raise NotImplementedError

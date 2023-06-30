@@ -1,4 +1,3 @@
-import numpy as np
 import random
 
 from typing import List 
@@ -26,7 +25,7 @@ class TimeRetriever(BaseRetriever):
 
     def sample_with_ratio(self, pos_item_ids: List[int], neg_item_ids: List[int]) -> List[int]:
         assert len(pos_item_ids) + len(neg_item_ids) >= self.num_candidate_items 
-        num_pos = self.num_candidate_items * self.pos_neg_ratio
+        num_pos = int(self.num_candidate_items * self.pos_neg_ratio)
         num_neg = self.num_candidate_items - num_pos
         if len(pos_item_ids) > num_pos and len(neg_item_ids) > num_neg:
             return pos_item_ids[-num_pos:] + neg_item_ids[-num_neg:]
@@ -44,15 +43,15 @@ class RandomRetriever(BaseRetriever):
     
     def sample(self, item_ids: List[int]) -> List[int]:
         assert len(item_ids) >= self.num_candidate_items
-        return random.sample(item_ids, self.num_candidate_items)
+        return random.choices(item_ids, k=self.num_candidate_items)
 
     def sample_with_ratio(self, pos_item_ids: List[int], neg_item_ids: List[int]) -> List[int]:
         assert len(pos_item_ids) + len(neg_item_ids) >= self.num_candidate_items 
-        num_pos = self.num_candidate_items * self.pos_neg_ratio
+        num_pos = int(self.num_candidate_items * self.pos_neg_ratio)
         num_neg = self.num_candidate_items - num_pos
         if len(pos_item_ids) > num_pos and len(neg_item_ids) > num_neg:
-            return random.sample(pos_item_ids, num_pos) + random.sample(neg_item_ids, num_neg)
+            return random.choices(pos_item_ids, k=num_pos) + random.choices(neg_item_ids, k=num_neg)
         if len(pos_item_ids) < num_pos:
-            return pos_item_ids + random.sample(neg_item_ids, self.num_candidate_items-len(pos_item_ids))
+            return pos_item_ids + random.choices(neg_item_ids, k=self.num_candidate_items-len(pos_item_ids))
         if len(neg_item_ids) < num_neg:
-            return neg_item_ids + random.sample(pos_item_ids, self.num_candidate_items-len(neg_item_ids))
+            return neg_item_ids + random.choices(pos_item_ids, k=self.num_candidate_items-len(neg_item_ids))
