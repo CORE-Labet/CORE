@@ -9,12 +9,9 @@ from collections import Counter
 from checker import BaseChecker
 from trainer import BaseTrainer
 from render import BaseRender
-from user import NOT_KNOW_SINGAL
 
-QUERY_ITEM_SIGNAL = "item"
-QUERY_ATTRIBUTE_SINGAL = "attribute"
-QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
-
+from render import NOT_KNOW_SINGAL
+from render import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
 
 class ConversationalAgent():
     def __init__(self, checker: BaseChecker, trainer: BaseTrainer, render: BaseRender, cold_start: bool = True):

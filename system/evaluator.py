@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import random
 import os
-import logging
 import pickle
 
 from user import UserAgent
@@ -13,9 +12,8 @@ from retriever import TimeRetriever, RandomRetriever
 from checker import ItemChecker, AttributeChecker, CoreChecker
 from render import RuleRender, LMRender
 
-from user import QUIT_SINGAL, YES_SINGAL
+from render import QUIT_SINGAL, YES_SINGAL
 
-logging.basicConfig(level=logging.INFO)
 
 def set_seed(seed):
     np.random.seed(seed)
@@ -103,21 +101,17 @@ def evaluate_offline_trainer(args):
 def evaluate_online_checker(args):
     set_seed(args.seed)
     retriever = load_retriever(args)
-    manager = DataManager(retriever=retriever)
-    current_path = os.path.abspath(os.getcwd()) 
-
-    data_path = os.path.join(current_path, "data/")
-    data_name = args.dataset + "_" + args.trainer
-    with open(os.path.join(data_path, data_name) + ".pickle", "rb") as f:
-        user_matrix, item_matrix, interaction_matrix = pickle.load(f)
-    manager.load(user_matrix=user_matrix, item_matrix=item_matrix, interaction_matrix=interaction_matrix)
+    manager = DataManager(data_name=args.dataset, retriever=retriever)
+    manager.load()
     print("====== LOAD DATA =====")
+    num_feat = manager.get_num_feat()
+    
     max_session_id = manager.set_online_checker(split_ratio=args.split_ratio)
     num_session = min(max_session_id, args.num_session)
 
     checker = load_checker(args)
     render = load_render(args)
-    trainer = load_trainer(args)
+    trainer = load_trainer(args, num_feat=num_feat)
     conversational_agent = ConversationalAgent(
         checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
     )

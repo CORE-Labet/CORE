@@ -1,19 +1,49 @@
 import argparse
 import torch
+import os
+import pickle
+import numpy as np
 
 from typing import List
 from evaluator import evaluate_online_checker
 
-def run(args):
+def run_data_dealer(args):
+    current_path = os.path.abspath(os.getcwd()) 
+    data_path = os.path.join(os.path.dirname(current_path), "data/")
+    if not os.path.exists(data_path):
+        os.makedirs(data_path, exist_ok=True)
+
+    if not os.path.exists(os.path.join(data_path, args.dataset) + ".pickle"):
+        user_ids = np.arange(0, 10)
+        user_matrix = np.random.randint(low=0, high=5, size=(10, 9))
+        user_matrix = np.column_stack((user_ids, user_matrix))
+        item_ids = np.arange(0, 50)
+        item_matrix = np.random.randint(low=0, high=5, size=(50, 9))
+        item_matrix = np.column_stack((item_ids, item_matrix))
+        
+        scores = np.random.randint(low=0, high=2, size=100)
+        indices = np.random.choice(len(user_ids) * len(item_ids), size=100, replace=False)
+        rows = indices // len(item_ids)
+        cols = indices % len(item_ids)
+        interaction_matrix = np.column_stack((user_ids[rows], item_ids[cols]))
+        interaction_matrix = np.column_stack((interaction_matrix, scores))
+
+        with open(os.path.join(data_path, f"{args.dataset}.pickle"), "wb") as f:
+            pickle.dump((user_matrix, item_matrix, interaction_matrix), f)
+    
+
+def run_evaluate_online_checker(args):
     average_turn, average_success_rate = evaluate_online_checker(args)
     print(f"===== AVG TRUN: {average_turn}, AVG SR: {average_success_rate} =====")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument()
     parser.add_argument("--seed", help="random seed", default=0, type=int)
     parser.add_argument("--cuda", help="gpu device", default=0, type=int)
-    parser.add_argument("--dataset", help="name of dataset", choices=["taobao", "tmall", "alipay", "amazon", "movielen"])
+    parser.add_argument("--dataset", help="name of dataset", default="taobao", choices=["taobao", "tmall", "alipay", "amazon", "movielen"])
+    parser.add_argument("--split_ratio", help="split ratio of splitting dataset into training and test datasets", default=0.8, type=float)
+    parser.add_argument("--num_session", help="number of sessions", default=4, type=int)
 
     parser.add_argument("--retriever", help="name of retriever", default="random", choices=["time", "random"])
     parser.add_argument("--candidate_items", help="number of candidate items per session", default=30, type=int)
@@ -48,3 +78,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     device = "cpu" if args.cuda < 0 else f"cuda:{args.cuda}"
     args.device = torch.device(device)
+
+    run_data_dealer(args=args)  # check whether data are pre-processed
+    run_evaluate_online_checker(args=args)

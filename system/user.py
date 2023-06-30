@@ -1,13 +1,10 @@
 import numpy as np
 
 from typing import List, Dict
-from agent import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
 from render import BaseRender
 
-QUIT_SINGAL = "quit"
-NOT_KNOW_SINGAL = "not_know"
-YES_SINGAL = "yes"
-NO_SINGAL = "no"
+from render import YES_SINGAL, NO_SINGAL, NOT_KNOW_SINGAL, QUIT_SINGAL
+from render import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
 
 
 class UserAgent():

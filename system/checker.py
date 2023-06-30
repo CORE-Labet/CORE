@@ -3,7 +3,8 @@ import random
 
 from collections import Counter
 from typing import List, Dict
-from agent import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
+
+from render import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
 
 
 class BaseChecker():
@@ -20,7 +21,7 @@ class BaseChecker():
         score_dict = dict(sorted(score_dict.items(), key=lambda x: x[1], reverse=True))
         return list(score_dict.keys())
 
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]], turn_id: int):
         raise NotImplementedError
 
     def evaluate(self, data_matrix: np.ndarray, item_ids: List[int]):
@@ -33,7 +34,7 @@ class ItemChecker(BaseChecker):
         super().__init__(n_items=n_items, n_attribute_val=n_attribute_val, query_attribute_val=query_attribute_val, 
                             query_attribute_only=query_attribute_only, query_item_only=query_item_only)
 
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]], num_turn: int = 0):
         assert not self.query_attribute_only
         sorted_items = self._sort_item(data_matrix=data_matrix, item_ids=item_ids)
         return (QUERY_ITEM_SIGNAL, sorted_items[:self.n_items])
@@ -48,7 +49,7 @@ class AttributeChecker(BaseChecker):
         super().__init__(n_items=n_items, n_attribute_val=n_attribute_val, query_attribute_val=query_attribute_val, 
                             query_attribute_only=query_attribute_only, query_item_only=query_item_only)
 
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], num_turn=0):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]], turn_id: int = 0):
         assert not self.query_item_only
         entros = []
         for attribute_id in attribute_ids.keys():
@@ -146,7 +147,7 @@ class CoreChecker(BaseChecker):
     def _calculate_attribute_val_with_dependence(self):
         raise NotImplementedError
     
-    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids=Dict[int: List[int]], turn_id=0):
+    def act(self, data_matrix: np.ndarray, item_ids: List[int], attribute_ids: Dict[int, List[int]], turn_id: int = 0):
         if self.query_item_only:
             max_item_ids, _ = self._calculate_item(data_matrix=data_matrix, item_ids=item_ids)
             return (QUERY_ITEM_SIGNAL, max_item_ids)
@@ -181,3 +182,4 @@ class CoreChecker(BaseChecker):
     def evaluate(self, data_matrix: np.ndarray, item_ids: List[int]):
         max_item_ids, _ = self._calculate_item(data_matrix=data_matrix, item_ids=item_ids)
         return (QUERY_ITEM_SIGNAL, max_item_ids)
+    

@@ -3,14 +3,21 @@ import openai
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from utils import load_openai_key
-from agent import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
-from user import YES_SINGAL, NO_SINGAL, QUIT_SINGAL
+
+QUIT_SINGAL = "quit"
+NOT_KNOW_SINGAL = "not_know"
+YES_SINGAL = "yes"
+NO_SINGAL = "no"
+
+QUERY_ITEM_SIGNAL = "item"
+QUERY_ATTRIBUTE_SINGAL = "attribute"
+QUERY_ATTRIBUTE_VAL_SIGNAL = "attribute_val"
 
 
 @dataclass
 class PromptTemplate:
     ids2querypre: Optional[str] = None
-    id2querypost: Optional[str] = None
+    ids2querypost: Optional[str] = None
     ids2response: Optional[str] = None
 
 
@@ -143,7 +150,3 @@ class LMRender(BaseRender):
     
     def query2ids(self, query: str):
         raise NotImplementedError
-
-
-if __name__ == "__main__":
-    render = RuleRender()
