@@ -93,7 +93,23 @@ def load_trainer(args, num_feat):
     return trainer
 
 def evaluate_offline_trainer(args):
-    pass
+    set_seed(args.seed)
+    retriever = load_retriever(args)
+    manager = DataManager(data_name=args.dataset, retriever=retriever)
+    manager.load()
+    print("====== LOAD DATA =====")
+    num_feat = manager.get_num_feat()
+
+    checker = load_checker(args)
+    render = load_render(args)
+    trainer = load_trainer(args, num_feat=num_feat)
+    conversational_agent = ConversationalAgent(
+        checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
+    )
+    
+    dataset = manager.set_offline_trainer(split_ratio=args.split_ratio, pad_len=args.pad_len)
+    best_auc = conversational_agent.train(args, dataset=dataset)
+    print("BEST AUC: ", best_auc)
 
 def evaluate_online_checker(args):
     set_seed(args.seed)

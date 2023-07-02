@@ -7,13 +7,17 @@ import numpy as np
 from typing import List
 from evaluator import evaluate_online_checker
 
-def run_data_dealer(args):
+# data is organized into three np.ndarry to store:
+# user_matrix: 1st col: user_ids
+# item_matrix: 1st col: item_ids
+# interaction_matrix: 1st user_ids, 2nd item_ids, 3rd time_stamp, 4th labels
+def run_data_dealer(args, redo=False):
     current_path = os.path.abspath(os.getcwd()) 
     data_path = os.path.join(os.path.dirname(current_path), "data/")
     if not os.path.exists(data_path):
         os.makedirs(data_path, exist_ok=True)
 
-    if not os.path.exists(os.path.join(data_path, args.dataset) + ".pickle"):
+    if not os.path.exists(os.path.join(data_path, args.dataset) + ".pickle") or redo:
         user_ids = np.arange(0, 10)
         user_matrix = np.random.randint(low=0, high=5, size=(10, 9))
         user_matrix = np.column_stack((user_ids, user_matrix))
@@ -22,11 +26,12 @@ def run_data_dealer(args):
         item_matrix = np.column_stack((item_ids, item_matrix))
         
         scores = np.random.randint(low=0, high=2, size=100)
+        times = np.random.randint(low=0, high=2, size = 100)
         indices = np.random.choice(len(user_ids) * len(item_ids), size=100, replace=False)
         rows = indices // len(item_ids)
         cols = indices % len(item_ids)
         interaction_matrix = np.column_stack((user_ids[rows], item_ids[cols]))
-        interaction_matrix = np.column_stack((interaction_matrix, scores))
+        interaction_matrix = np.column_stack((interaction_matrix, times, scores))
 
         with open(os.path.join(data_path, f"{args.dataset}.pickle"), "wb") as f:
             pickle.dump((user_matrix, item_matrix, interaction_matrix), f)
@@ -76,10 +81,12 @@ if __name__ == "__main__":
     parser.add_argument("--min_lr", help="min learning rate to clip", default=5e-4, type=float)
     parser.add_argument("--l2_reg", help="weight for l2 regularization", default=1e-4, type=float)
     parser.add_argument("--batch_size", help="batch size for training", default=128, type=int)
+    parser.add_argument("--pad_len", help="padding len of each sequence of user", default=8, type=int)
+    parser.add_argument("--num_workers", help="number of workers for dataloader", default=6, type=int)
 
     args = parser.parse_args()
     device = "cpu" if args.cuda < 0 else f"cuda:{args.cuda}"
     args.device = torch.device(device)
 
-    run_data_dealer(args=args)  # check whether data are pre-processed
+    run_data_dealer(args=args, redo=True)  # check whether data are pre-processed
     run_evaluate_online_checker(args=args)

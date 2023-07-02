@@ -44,12 +44,22 @@ class DataManager():
         unique_mask = np.unique(item_id_col, return_index=True)[1] 
         self.all_item_matrix = self.all_item_matrix[unique_mask]
 
-        assert len(self.user_ids) == self.all_user_matrix.shape[0] and len(self.item_ids) == self.all_item_matrix.shape[0]
-        assert self.all_interaction_matrix.shape[-1] == 3
+        assert set(self.user_ids) == set(self.all_user_matrix[:,0]) 
+        assert set(self.item_ids) == set(self.all_item_matrix[:,0])
+        assert set(self.all_interaction_matrix[:,0]).issubset(set(self.user_ids)), "each user should have feat"
+        assert set(self.all_interaction_matrix[:,1]).issubset(set(self.item_ids)), "each item should have feat"
     
     def get_num_feat(self):
-        # num_feat = len(user_ids) + len(item_ids), embedding rows
-        return self.all_user_matrix.shape[0] + self.all_item_matrix.shape[0]
+        # num_feat includes all uniques values in each col
+        num_feat = 0
+        for col in self.all_user_matrix.T:  # col in user side
+            num_feat += len(set(col))
+        for col in self.all_item_matrix.T:  # col in item side
+            num_feat += len(set(col))
+        if self.all_interaction_matrix.shape[1] > 3:    # col in interaction (both sides)
+            for col in self.all_interaction_matrix[:,4:].T:
+                num_feat += len(set(col))
+        return num_feat
     
     def load(self, user_matrix: np.ndarray = None, item_matrix: np.ndarray = None, interaction_matrix: np.ndarray = None):
         if not (user_matrix and item_matrix and interaction_matrix):
@@ -61,10 +71,10 @@ class DataManager():
         self.all_item_matrix = item_matrix
         self.all_interaction_matrix = interaction_matrix
         
-        user_ids = user_matrix[:,0].tolist()    # user_ids are stored at 1st col
+        user_ids = interaction_matrix[:,0].tolist()    # user_ids are stored at 1st col
         self.user_ids = list(set(user_ids))
         self.user_ids.sort()
-        item_ids = item_matrix[:,0].tolist()    # item_ids are stored at 2nd col
+        item_ids = interaction_matrix[:,1].tolist()    # item_ids are stored at 2nd col
         self.item_ids = list(set(item_ids))
         self.item_ids.sort()
 
@@ -78,20 +88,23 @@ class DataManager():
         if new_user_matrix:
             assert len(self.all_user_matrix.shape) == len(new_user_matrix.shape) and self.all_user_matrix.shape[1] == new_user_matrix.shape[1], f"new_user_matrix {new_user_matrix.shape} not match all_user_matrix {self.all_user_matrix.shape}"
             self.all_user_matrix = np.stack((self.all_user_matrix, new_user_matrix), axis=0)
-            user_ids = self.all_user_matrix[:,0].tolist()    # user_ids are stored at 1st col
-            self.user_ids = list(set(user_ids))
-            self.user_ids.sort()
+
         if new_item_matrix:
             assert len(self.all_item_matrix.shape) == len(new_item_matrix.shape) and self.all_item_matrix.shape[1] == new_item_matrix.shape[1], f"new_item_matrix {new_item_matrix.shape} not match all_item_matrix {self.all_item_matrix.shape}"
             self.all_item_matrix = np.stack((self.all_user_matrix, new_user_matrix), axis=0)
-            item_ids = self.all_item_matrix[:,1].tolist()    # item_ids are stored at 2nd col
-            self.item_ids = list(set(item_ids))
-            self.item_ids.sort()
         
         if new_interaction_matrix:
             assert len(self.all_interaction_matrix.shape) == len(new_interaction_matrix.shape) and self.all_interaction_matrix.shape[1] == new_interaction_matrix.shape[1], f"new_interaction_matrix {new_interaction_matrix.shape} not match all_interaction_matrix {self.all_interaction_matrix.shape}"
             self.all_interaction_matrix = np.stack((self.all_interaction_matrix, new_interaction_matrix), axis=0)
-        
+            
+            user_ids = self.all_interaction_matrix[:,0].tolist()    # user_ids are stored at 1st col
+            self.user_ids = list(set(user_ids))
+            self.user_ids.sort()
+            
+            item_ids = self.all_interaction_matrix[:,1].tolist()    # item_ids are stored at 2nd col
+            self.item_ids = list(set(item_ids))
+            self.item_ids.sort()
+
             self.label_ids = {}
             for user_id in self.user_ids:
                 mask = (self.all_interaction_matrix[:,0] == user_id) & (self.all_interaction_matrix[:,-1] >= 1)
@@ -128,7 +141,7 @@ class DataManager():
         self.session2user = {}
         return len(self.online_user_ids)
     
-    def set_offline_trainer(self, split_ratio: float = 0.8):
+    def set_offline_trainer(self, split_ratio: float = 0.8, pad_len: int = 4):
         if self.online_user_ids:
             candidate_user_ids = [user_id for user_id in self.user_ids if user_id not in self.online_user_ids]
         else:
@@ -136,9 +149,60 @@ class DataManager():
             self.online_user_ids = [user_id for user_id in self.user_ids if user_id not in candidate_user_ids]
         
         class Dataset4Train(Dataset):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, candidate_user_ids: List[int] = None, pad_len: int = 8):
+                super(Dataset4Train, self).__init__()
+                self.user_ids = candidate_user_ids
+                self.pad_len = pad_len
+
+                self.data = {}
+                self.seq_len = {}
+            
+            def __len__(self):
+                assert self.data, "load data first"
+                return len(self.data)
+
+            def check(self):
+                if self.user_ids:
+                    assert set(self.user_ids).issubset(set(self.data.keys())), "all user_ids should have historical data"
+            
+            def load(self, user_matrix: np.ndarray, item_matrix: np.ndarray, interaction_matrix: np.ndarray):
+                user_ids = set(interaction_matrix[:,0].tolist())
+                for user_id in user_ids:
+                    _user_matrix = user_matrix[user_matrix[:,0] == user_id]
+                    _interaction_matrix = interaction_matrix[interaction_matrix[:,0] == user_id]
+                    _item_ids = set(_interaction_matrix[:,1].tolist())
+                    _item_matrices = []
+                    for _item_id in _item_ids:
+                        _item_matrix = item_matrix[item_matrix[:,0] == _item_id]
+                        _item_matrix = np.concatenate((_user_matrix, _item_matrix), axis=-1) # concat user_feat and item_feat to make item_feat
+                        _item_matrices.append(_item_matrix)
+
+                    if len(_item_matrices) < self.pad_len:
+                        len2pad = self.pad_len - len(_item_matrices)
+                        for _ in range(len2pad):
+                            _item_matrix = np.full(shape=_item_matrix.shape, value=-1)
+                            _item_matrices.append(_item_matrix)
+                        self.seq_len.update({user_id: self.pad_len - len2pad})
+                    elif len(_item_matrices) > self.pad_len:
+                        _item_matrices = _item_matrices[-self.pad_len:]
+                        self.seq_len.update({user_id: self.pad_len})
+                    else:
+                        self.seq_len.update({user_id: self.pad_len})
+                    
+                    _item_matrices = np.concatenate(_item_matrices, axis=0)
+                    self.data.update({user_id: _item_matrices})
+
+            def __getitem__(self, user_id: int):
+                if self.user_ids:
+                    assert user_id in self.user_ids, "user_id must be candidate_user_ids" 
+                assert user_id in self.data.keys(), "user_id must be stored user_ids" 
+                return (self.data[user_id], self.seq_len[user_id])
         
+        dataset4train = Dataset4Train(candidate_user_ids=candidate_user_ids, pad_len=pad_len)
+        dataset4train.load(user_matrix=self.all_user_matrix, item_matrix=self.all_item_matrix, interaction_matrix=self.all_interaction_matrix)
+        dataset4train.check()
+
+        return dataset4train
 
     def set_session(self, user_id: int = None, enable_overlap: bool = False):   # to simulate online checking and offline training
         assert self.online_user_ids and self.user_ids and self.item_ids and self.label_ids, "load data and setup online checker first"
