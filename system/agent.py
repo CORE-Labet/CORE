@@ -178,7 +178,7 @@ class ConversationalAgent():
         optimizer = torch.optim.AdamW(self.trainer.parameters(), lr=args.lr, weight_decay=args.l2_reg)
         criterion = torch.nn.BCELoss()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="max", factor=0.9, 
-                            patience=len(dataset)//(args.batch_size*5), verbose=True, min_lr=args.min_lr)
+                            patience=len(train)//(args.batch_size*5), verbose=True, min_lr=args.min_lr)
         train = DataLoader(dataset=train)
         valid = DataLoader(dataset=valid)
         
