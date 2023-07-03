@@ -174,17 +174,18 @@ class ConversationalAgent():
         loss, acc, auc = self._evaluate_with_criterion(*res, criterion=criterion)
         return (loss, acc, auc)
 
-    def train(self, args, dataset: Dataset):
+    def train(self, args, train: Dataset, valid: Dataset):
         optimizer = torch.optim.AdamW(self.trainer.parameters(), lr=args.lr, weight_decay=args.l2_reg)
         criterion = torch.nn.BCELoss()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="max", factor=0.9, 
                             patience=len(dataset)//(args.batch_size*5), verbose=True, min_lr=args.min_lr)
-        dataloader = DataLoader(dataset=dataset)
+        train = DataLoader(dataset=train)
+        valid = DataLoader(dataset=valid)
         
         best_auc = 0
         for _ in range(args.epochs):
-            self._train_trainer(args=args, dataloader=dataloader, optimizer=optimizer, scheduler=scheduler, criterion=criterion)
-            res = self._evaluate_trainer(args=args, dataloader=dataloader, criterion=criterion)
+            self._train_trainer(args=args, dataloader=train, optimizer=optimizer, scheduler=scheduler, criterion=criterion)
+            res = self._evaluate_trainer(args=args, dataloader=valid, criterion=criterion)
             auc = res[-1]
             if auc > best_auc:
                 best_auc = auc

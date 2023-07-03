@@ -95,7 +95,7 @@ def load_trainer(args, num_feat):
 def evaluate_offline_trainer(args):
     set_seed(args.seed)
     retriever = load_retriever(args)
-    manager = DataManager(data_name=args.dataset, retriever=retriever)
+    manager = DataManager(data_name=args.dataset, retriever=retriever, split_ratio=args.split_ratio)
     manager.load()
     print("====== LOAD DATA =====")
     num_feat = manager.get_num_feat()
@@ -107,19 +107,19 @@ def evaluate_offline_trainer(args):
         checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
     )
     
-    dataset = manager.set_offline_trainer(split_ratio=args.split_ratio, pad_len=args.pad_len)
-    best_auc = conversational_agent.train(args, dataset=dataset)
-    print("BEST AUC: ", best_auc)
+    train, valid = manager.set_offline_trainer(pad_len=args.pad_len)
+    best_auc = conversational_agent.train(args=args, train=train, valid=valid)
+    return best_auc
 
 def evaluate_online_checker(args):
     set_seed(args.seed)
     retriever = load_retriever(args)
-    manager = DataManager(data_name=args.dataset, retriever=retriever)
+    manager = DataManager(data_name=args.dataset, retriever=retriever, split_ratio=args.split_ratio)
     manager.load()
     print("====== LOAD DATA =====")
     num_feat = manager.get_num_feat()
     
-    max_session_id = manager.set_online_checker(split_ratio=args.split_ratio)
+    max_session_id = manager.set_online_checker()
     num_session = min(max_session_id, args.num_session)
 
     checker = load_checker(args)

@@ -4,8 +4,8 @@ import os
 import pickle
 import numpy as np
 
-from typing import List
-from evaluator import evaluate_online_checker
+from typing import List, Dict
+from evaluator import evaluate_online_checker, evaluate_offline_trainer
 
 # data is organized into three np.ndarry to store:
 # user_matrix: 1st col: user_ids
@@ -41,13 +41,18 @@ def run_evaluate_online_checker(args):
     average_turn, average_success_rate = evaluate_online_checker(args)
     print(f"===== AVG TRUN: {average_turn}, AVG SR: {average_success_rate} =====")
 
+def run_evaluate_offline_trainer(args):
+    best_auc = evaluate_offline_trainer(args)
+    print(f"===== BEST AUC: {best_auc} =====")
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", help="random seed", default=0, type=int)
     parser.add_argument("--cuda", help="gpu device", default=0, type=int)
     parser.add_argument("--dataset", help="name of dataset", default="taobao", choices=["taobao", "tmall", "alipay", "amazon", "movielen"])
-    parser.add_argument("--split_ratio", help="split ratio of splitting dataset into training and test datasets", default=0.8, type=float)
+    parser.add_argument("--split_ratio", help="split ratio of splitting dataset into offline_train, offline_validation and online_checking datasets", default={"train": 0.6, "valid": 0.2, "online": 0.2}, type=Dict)
     parser.add_argument("--num_session", help="number of sessions", default=4, type=int)
     parser.add_argument("--num_turn", help="number of turns per session", default=4, type=int)
     parser.add_argument("--failure_penalty", help="penlty of number of turns for each session", default=3, type=int)
@@ -89,4 +94,5 @@ if __name__ == "__main__":
     args.device = torch.device(device)
 
     run_data_dealer(args=args, redo=True)  # check whether data are pre-processed
-    run_evaluate_online_checker(args=args)
+    # run_evaluate_online_checker(args=args)
+    run_evaluate_offline_trainer(args=args)

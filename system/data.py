@@ -10,7 +10,8 @@ from retriever import BaseRetriever
 
 
 class DataManager():
-    def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None):
+    def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None, 
+                            split_ratio: Dict = {"train": 0.6, "valid": 0.2, "online": 0.2}):
         self.data_name = data_name
         if not data_path:
             assert data_name, "at least one of data_path and data_name should be vaild"
@@ -23,6 +24,8 @@ class DataManager():
         self.user_ids = []
         self.item_ids = []
         self.retriever = retriever
+        self.split_ratio = split_ratio  # offline_train: offline_valid: online_check
+        assert sum(self.split_ratio.values()) == 1
 
         # online checking
         self.session_id = 0
@@ -71,10 +74,10 @@ class DataManager():
         self.all_item_matrix = item_matrix
         self.all_interaction_matrix = interaction_matrix
         
-        user_ids = interaction_matrix[:,0].tolist()    # user_ids are stored at 1st col
+        user_ids = user_matrix[:,0].tolist()    # user_ids are stored at 1st col
         self.user_ids = list(set(user_ids))
         self.user_ids.sort()
-        item_ids = interaction_matrix[:,1].tolist()    # item_ids are stored at 2nd col
+        item_ids = item_matrix[:,0].tolist()    # item_ids are stored at 1st col
         self.item_ids = list(set(item_ids))
         self.item_ids.sort()
 
@@ -121,7 +124,7 @@ class DataManager():
         with open(data_path, "wb") as f:
             pickle.dump((self.all_user_matrix, self.all_item_matrix, self.all_interaction_matrix), f)
 
-    def set_online_checker(self, online_label_ids: Dict[int, List[int]] = None, split_ratio: float = 0.8):
+    def set_online_checker(self, online_label_ids: Dict[int, List[int]] = None):
         if online_label_ids:
             candidate_user_ids = list(online_label_ids.keys())
             assert not [user_id for user_id in candidate_user_ids if user_id not in self.user_ids]
@@ -130,7 +133,7 @@ class DataManager():
             if self.online_user_ids:
                 candidate_user_ids = self.online_user_ids
             else:
-                candidate_user_ids = random.choices(self.user_ids, k=int((1-split_ratio)*len(self.user_ids)))
+                candidate_user_ids = random.choices(self.user_ids, k=int((1-self.split_ratio["online"])*len(self.user_ids)))
                 self.online_user_ids = candidate_user_ids
             
             online_label_ids = {}
@@ -140,69 +143,84 @@ class DataManager():
         self.session_id = 0
         self.session2user = {}
         return len(self.online_user_ids)
+
+    def _compute_seq_data(self, pad_len: int):
+        seq_data, seq_len = {}, {}
+        user_ids = set(self.all_interaction_matrix[:,0].tolist())
+        for user_id in user_ids:
+            _user_matrix = self.all_user_matrix[self.all_user_matrix[:,0] == user_id]
+            _interaction_matrix = self.all_interaction_matrix[self.all_interaction_matrix[:,0] == user_id]
+            _item_ids = set(_interaction_matrix[:,1].tolist())
+            _item_matrices = []
+            for _item_id in _item_ids:
+                _item_matrix = self.all_item_matrix[self.all_item_matrix[:,0] == _item_id]
+                _item_matrix = np.concatenate((_user_matrix, _item_matrix), axis=-1) # concat user_feat and item_feat to make item_feat
+                _item_matrices.append(_item_matrix)
+
+            if len(_item_matrices) < pad_len:
+                len2pad = pad_len - len(_item_matrices)
+                for _ in range(len2pad):
+                    _item_matrix = np.full(shape=_item_matrix.shape, fill_value=-1)
+                    _item_matrices.append(_item_matrix)
+                seq_len.update({user_id: pad_len - len2pad})
+            elif len(_item_matrices) > pad_len:
+                _item_matrices = _item_matrices[-pad_len:]
+                seq_len.update({user_id: pad_len})
+            else:
+                seq_len.update({user_id: pad_len})
+            _item_matrices = np.concatenate(_item_matrices, axis=0)
+            seq_data.update({user_id: _item_matrices})
+        
+        return (seq_data, seq_len)
     
-    def set_offline_trainer(self, split_ratio: float = 0.8, pad_len: int = 4):
-        if self.online_user_ids:
-            candidate_user_ids = [user_id for user_id in self.user_ids if user_id not in self.online_user_ids]
+    def _save_seq_data(self, seq_data: Dict, seq_len: Dict):
+        if not os.path.exists(self.data_path):
+            os.makedirs(self.data_path, exist_ok=True)
+        
+        data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
+        with open(data_path, "wb") as f:
+            pickle.dump((seq_data, seq_len), f)
+    
+    def set_offline_trainer(self, pad_len: int = 4, enable_save: bool = False):
+        if not self.online_user_ids:
+            self.online_user_ids = random.choices(self.user_ids, k=int(self.split_ratio["online"]*len(self.user_ids)))
+        
+        candidate_user_ids = [user_id for user_id in self.user_ids if user_id not in self.online_user_ids]
+        train_user_ids = random.choices(candidate_user_ids, k=int((self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"]))*len(candidate_user_ids)))
+        valid_user_ids = [user_id for user_id in candidate_user_ids if user_id not in train_user_ids]
+        
+        data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
+        if os.path.exists(data_path) and enable_save:
+            with open(data_path, "wb") as f:
+                seq_data, seq_len = pickle.load(f)
         else:
-            candidate_user_ids = random.choices(self.user_ids, k=int(split_ratio*len(self.user_ids)))
-            self.online_user_ids = [user_id for user_id in self.user_ids if user_id not in candidate_user_ids]
+            seq_data, seq_len = self._compute_seq_data(pad_len=pad_len)
+            if enable_save:
+                self._save_seq_data(seq_data=seq_data, seq_len=seq_len)
+        
+        train_seq_data, train_seq_len = {}, {}
+        valid_seq_data, valid_seq_len = {}, {}
+        train_seq_data.update({user_id: seq_data[user_id] for user_id in train_user_ids})
+        train_seq_len.update({user_id: seq_len[user_id] for user_id in train_user_ids})
+        valid_seq_data.update({user_id: seq_data[user_id] for user_id in valid_user_ids})
+        valid_seq_len.update({user_id: seq_len[user_id] for user_id in valid_user_ids})
         
         class Dataset4Train(Dataset):
-            def __init__(self, candidate_user_ids: List[int] = None, pad_len: int = 8):
+            def __init__(self, seq_data: Dict, seq_len: Dict):
                 super(Dataset4Train, self).__init__()
-                self.user_ids = candidate_user_ids
-                self.pad_len = pad_len
-
-                self.data = {}
-                self.seq_len = {}
-            
+                assert len(seq_data) == len(seq_len), f"num of seqs in seq_data {len(seq_data)} and seq_len {len(seq_len)} should be aligned"
+                self.seq_data = seq_data
+                self.seq_len = seq_len
+                            
             def __len__(self):
-                assert self.data, "load data first"
-                return len(self.data)
+                return len(self.seq_data)
 
-            def check(self):
-                if self.user_ids:
-                    assert set(self.user_ids).issubset(set(self.data.keys())), "all user_ids should have historical data"
-            
-            def load(self, user_matrix: np.ndarray, item_matrix: np.ndarray, interaction_matrix: np.ndarray):
-                user_ids = set(interaction_matrix[:,0].tolist())
-                for user_id in user_ids:
-                    _user_matrix = user_matrix[user_matrix[:,0] == user_id]
-                    _interaction_matrix = interaction_matrix[interaction_matrix[:,0] == user_id]
-                    _item_ids = set(_interaction_matrix[:,1].tolist())
-                    _item_matrices = []
-                    for _item_id in _item_ids:
-                        _item_matrix = item_matrix[item_matrix[:,0] == _item_id]
-                        _item_matrix = np.concatenate((_user_matrix, _item_matrix), axis=-1) # concat user_feat and item_feat to make item_feat
-                        _item_matrices.append(_item_matrix)
-
-                    if len(_item_matrices) < self.pad_len:
-                        len2pad = self.pad_len - len(_item_matrices)
-                        for _ in range(len2pad):
-                            _item_matrix = np.full(shape=_item_matrix.shape, value=-1)
-                            _item_matrices.append(_item_matrix)
-                        self.seq_len.update({user_id: self.pad_len - len2pad})
-                    elif len(_item_matrices) > self.pad_len:
-                        _item_matrices = _item_matrices[-self.pad_len:]
-                        self.seq_len.update({user_id: self.pad_len})
-                    else:
-                        self.seq_len.update({user_id: self.pad_len})
-                    
-                    _item_matrices = np.concatenate(_item_matrices, axis=0)
-                    self.data.update({user_id: _item_matrices})
-
-            def __getitem__(self, user_id: int):
-                if self.user_ids:
-                    assert user_id in self.user_ids, "user_id must be candidate_user_ids" 
-                assert user_id in self.data.keys(), "user_id must be stored user_ids" 
-                return (self.data[user_id], self.seq_len[user_id])
+            def __getitem__(self, user_id):
+                return (self.seq_data[user_id], self.seq_len[user_id])
         
-        dataset4train = Dataset4Train(candidate_user_ids=candidate_user_ids, pad_len=pad_len)
-        dataset4train.load(user_matrix=self.all_user_matrix, item_matrix=self.all_item_matrix, interaction_matrix=self.all_interaction_matrix)
-        dataset4train.check()
-
-        return dataset4train
+        train = Dataset4Train(seq_data=train_seq_data, seq_len=train_seq_len)
+        valid = Dataset4Train(seq_data=valid_seq_data, seq_len=valid_seq_len)
+        return (train, valid)
 
     def set_session(self, user_id: int = None, enable_overlap: bool = False):   # to simulate online checking and offline training
         assert self.online_user_ids and self.user_ids and self.item_ids and self.label_ids, "load data and setup online checker first"
