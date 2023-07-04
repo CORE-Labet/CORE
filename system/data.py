@@ -147,10 +147,12 @@ class DataManager():
     def _compute_seq_data(self, pad_len: int):
         seq_data, seq_len = {}, {}
         user_ids = set(self.all_interaction_matrix[:,0].tolist())
+        
         for user_id in user_ids:
             _user_matrix = self.all_user_matrix[self.all_user_matrix[:,0] == user_id]
             _interaction_matrix = self.all_interaction_matrix[self.all_interaction_matrix[:,0] == user_id]
-            _item_ids = set(_interaction_matrix[:,1].tolist())
+            _label_matrix = _interaction_matrix[:,-1].tolist()   # last col is label
+            _item_ids = _interaction_matrix[:,1].tolist()
             _item_matrices = []
             for _item_id in _item_ids:
                 _item_matrix = self.all_item_matrix[self.all_item_matrix[:,0] == _item_id]
@@ -162,15 +164,20 @@ class DataManager():
                 for _ in range(len2pad):
                     _item_matrix = np.full(shape=_item_matrix.shape, fill_value=-1)
                     _item_matrices.append(_item_matrix)
+                _label_matrix.extend([-1 for _ in range(len2pad)])
                 seq_len.update({user_id: pad_len - len2pad})
             elif len(_item_matrices) > pad_len:
                 _item_matrices = _item_matrices[-pad_len:]
+                _label_matrix = _label_matrix[-pad_len:]
                 seq_len.update({user_id: pad_len})
             else:
                 seq_len.update({user_id: pad_len})
+
             _item_matrices = np.concatenate(_item_matrices, axis=0)
+            _label_matrix = np.array(_label_matrix)[:,np.newaxis]
+            _item_matrices = np.concatenate((_item_matrices, _label_matrix), axis=-1)
             seq_data.update({user_id: _item_matrices})
-        
+
         return (seq_data, seq_len)
     
     def _save_seq_data(self, seq_data: Dict, seq_len: Dict):
@@ -204,19 +211,26 @@ class DataManager():
         train_seq_len.update({user_id: seq_len[user_id] for user_id in train_user_ids})
         valid_seq_data.update({user_id: seq_data[user_id] for user_id in valid_user_ids})
         valid_seq_len.update({user_id: seq_len[user_id] for user_id in valid_user_ids})
-        
+
         class Dataset4Train(Dataset):
             def __init__(self, seq_data: Dict, seq_len: Dict):
                 super(Dataset4Train, self).__init__()
-                assert len(seq_data) == len(seq_len), f"num of seqs in seq_data {len(seq_data)} and seq_len {len(seq_len)} should be aligned"
+                assert set(seq_data.keys()) == set(seq_len.keys()), "user_id in seq_data and seq_len should be same"
+                self.user_ids = list(seq_data.keys())
+                self.user_ids.sort()
+                
                 self.seq_data = seq_data
                 self.seq_len = seq_len
                             
             def __len__(self):
                 return len(self.seq_data)
 
-            def __getitem__(self, user_id):
-                return (self.seq_data[user_id], self.seq_len[user_id])
+            def __getitem__(self, idx):
+                user_id = self.user_ids[idx]
+                x = self.seq_data[user_id][:,:-1] # feat
+                y = self.seq_data[user_id][:,-1]  # label
+                m = self.seq_len[user_id]   # mask
+                return (x, y, m)
         
         train = Dataset4Train(seq_data=train_seq_data, seq_len=train_seq_len)
         valid = Dataset4Train(seq_data=valid_seq_data, seq_len=valid_seq_len)

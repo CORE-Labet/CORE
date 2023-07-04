@@ -92,7 +92,7 @@ class FM(nn.Module):
         # inputs: (B, ..., F), F is the num of fields
         linear_part = torch.sum(self.W1(x), dim=-2) + self.W0  # (B, ..., 1)
         x = self.V(x)  # (B, ..., F, K)
-        if self.F:
+        if hasattr(self, "F"):
             x += self.F
         product_part = torch.pow(torch.sum(x, -2), 2)  # (B, ..., K)
         product_part += torch.sum(torch.pow(x, 2), -2)

@@ -149,11 +149,23 @@ class ConversationalAgent():
         return (loss, acc, roc_auc_score(y_true=y, y_score=y_))
     
     def _train_trainer(self, args, dataloader, optimizer, scheduler, criterion):
+        self.trainer.to(args.device)
         self.trainer.train()
         for data in tqdm(dataloader):
+            print(data)
+            print(type(data))
             data = [_.to(args.device, non_blocking=True) for _ in data]
-            x, y = data
+            x, y, m = data
+
+            print("===== DEBUG =====")
+            print("x", x)
+            print("y", y)
+            print("m", m)
+            print(y.shape[1])
+            
+            
             y_ = self.trainer(x, y.shape[1])
+            exit()
             loss, acc, auc = self._evaluate_with_criterion(y_=y_, y=y, criterion=criterion)
             optimizer.zero_grad()
             loss.backward()
