@@ -13,6 +13,7 @@ from render import BaseRender
 from render import NOT_KNOW_SINGAL, YES_SINGAL, NO_SINGAL
 from render import QUERY_ITEM_SIGNAL, QUERY_ATTRIBUTE_SINGAL, QUERY_ATTRIBUTE_VAL_SIGNAL
 
+
 class ConversationalAgent():
     def __init__(self, checker: BaseChecker, trainer: BaseTrainer, render: BaseRender, cold_start: bool = True):
         self.checker = checker
@@ -151,6 +152,8 @@ class ConversationalAgent():
     def _train_trainer(self, args, dataloader, optimizer, scheduler, criterion):
         self.trainer.to(args.device)
         self.trainer.train()
+
+        dataloader.set_mode("train")
         for data in tqdm(dataloader):
             print(data)
             print(type(data))
@@ -176,6 +179,8 @@ class ConversationalAgent():
     def _evaluate_trainer(self, args, dataloader, criterion):
         self.trainer.eval()
         res = []
+
+        dataloader.set_mode("valid")
         with torch.no_grad():
             for data in tqdm(dataloader):
                 x, y = data
@@ -186,18 +191,17 @@ class ConversationalAgent():
         loss, acc, auc = self._evaluate_with_criterion(*res, criterion=criterion)
         return (loss, acc, auc)
 
-    def train(self, args, train: Dataset, valid: Dataset):
+    def train(self, args, dataset: Dataset):
         optimizer = torch.optim.AdamW(self.trainer.parameters(), lr=args.lr, weight_decay=args.l2_reg)
         criterion = torch.nn.BCELoss()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="max", factor=0.9, 
-                            patience=len(train)//(args.batch_size*5), verbose=True, min_lr=args.min_lr)
-        train = DataLoader(dataset=train)
-        valid = DataLoader(dataset=valid)
+                            patience=len(dataset)//(args.batch_size*5), verbose=True, min_lr=args.min_lr)
+        dataloader = DataLoader(dataset=dataset)
         
         best_auc = 0
         for _ in range(args.epochs):
-            self._train_trainer(args=args, dataloader=train, optimizer=optimizer, scheduler=scheduler, criterion=criterion)
-            res = self._evaluate_trainer(args=args, dataloader=valid, criterion=criterion)
+            self._train_trainer(args=args, dataloader=dataloader, optimizer=optimizer, scheduler=scheduler, criterion=criterion)
+            res = self._evaluate_trainer(args=args, dataloader=dataloader, criterion=criterion)
             auc = res[-1]
             if auc > best_auc:
                 best_auc = auc

@@ -70,9 +70,10 @@ def load_checker(args):
         raise NotImplementedError
     return checker
 
-def load_trainer(args, num_feat):
+def load_trainer(args, num_val, num_feat):
     if args.trainer in ["fm", "deepfm", "pnn", "esmm", "esmm2", "mmoe"]:
         trainer = TowerTrainer(
+            num_val=num_val,
             num_feat=num_feat,
             input_size=args.input_size,
             hidden_sizes=args.pre_hidden_sizes,
@@ -81,6 +82,7 @@ def load_trainer(args, num_feat):
         )
     elif args.trainer in ["lstm", "gru", "din"]:
         trainer = SequenceTrainer(
+            num_val=num_val,
             num_feat=num_feat,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
@@ -98,11 +100,11 @@ def evaluate_offline_trainer(args):
     manager = DataManager(data_name=args.dataset, retriever=retriever, split_ratio=args.split_ratio)
     manager.load()
     print("====== LOAD DATA =====")
-    num_feat = manager.get_num_feat()
+    num_val, num_feat = manager.get_statics()
 
     checker = load_checker(args)
     render = load_render(args)
-    trainer = load_trainer(args, num_feat=num_feat)
+    trainer = load_trainer(args, num_val=num_val, num_feat=num_feat)
     conversational_agent = ConversationalAgent(
         checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
     )
@@ -117,14 +119,14 @@ def evaluate_online_checker(args):
     manager = DataManager(data_name=args.dataset, retriever=retriever, split_ratio=args.split_ratio)
     manager.load()
     print("====== LOAD DATA =====")
-    num_feat = manager.get_num_feat()
+    num_val, num_feat = manager.get_statics()
     
     max_session_id = manager.set_online_checker()
     num_session = min(max_session_id, args.num_session)
 
     checker = load_checker(args)
     render = load_render(args)
-    trainer = load_trainer(args, num_feat=num_feat)
+    trainer = load_trainer(args, num_val=num_val, num_feat=num_feat)
     conversational_agent = ConversationalAgent(
         checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
     )

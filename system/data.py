@@ -9,6 +9,37 @@ from collections import Counter
 from retriever import BaseRetriever
 
 
+# organize data for trainer
+class Dataset4Trainer(Dataset):
+    def __init__(self, seq_data: Dict, seq_len: Dict, split_ratio: Dict):
+        super(Dataset4Trainer, self).__init__()
+        assert set(seq_data.keys()) == set(seq_len.keys()), "user_id in seq_data and seq_len should be same"
+        self.user_ids = list(seq_data.keys())
+        self.user_ids.sort()
+        
+        self.seq_data = seq_data
+        self.seq_len = seq_len
+
+        self.split_ratio = split_ratio
+        self.split_locs = None
+                    
+    def __len__(self):
+        return len(self.seq_data)
+    
+    def set_mode(self, mode: str):
+        assert mode in self.split_ratio.keys()
+        self.split_locs = self.split_ratio[mode]
+
+    def __getitem__(self, idx):
+        user_id = self.user_ids[idx]
+        seq_data = self.seq_data[user_id]
+        begin, end = int(len(seq_data) * self.split_locs[0]), int(len(seq_data) * self.split_locs[1])
+        x = seq_data[:end,:-1] # feat
+        y = seq_data[begin:end,-1]  # label
+        m = self.seq_len[user_id]   # mask
+        return (x, y, m)
+
+
 class DataManager():
     def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None, 
                             split_ratio: Dict = {"train": 0.6, "valid": 0.2, "online": 0.2}):
@@ -52,17 +83,18 @@ class DataManager():
         assert set(self.all_interaction_matrix[:,0]).issubset(set(self.user_ids)), "each user should have feat"
         assert set(self.all_interaction_matrix[:,1]).issubset(set(self.item_ids)), "each item should have feat"
     
-    def get_num_feat(self):
-        # num_feat includes all uniques values in each col
-        num_feat = 0
+    def get_statics(self):
+        # num_values includes all uniques values in all cols
+        num_val = 0
         for col in self.all_user_matrix.T:  # col in user side
-            num_feat += len(set(col))
+            num_val += len(set(col))
         for col in self.all_item_matrix.T:  # col in item side
-            num_feat += len(set(col))
+            num_val += len(set(col))
         if self.all_interaction_matrix.shape[1] > 3:    # col in interaction (both sides)
             for col in self.all_interaction_matrix[:,4:].T:
-                num_feat += len(set(col))
-        return num_feat
+                num_val += len(set(col))
+        num_feat = self.all_user_matrix.shape[1] + self.all_item_matrix.shape[1]
+        return (num_val, num_feat)
     
     def load(self, user_matrix: np.ndarray = None, item_matrix: np.ndarray = None, interaction_matrix: np.ndarray = None):
         if not (user_matrix and item_matrix and interaction_matrix):
@@ -191,10 +223,8 @@ class DataManager():
     def set_offline_trainer(self, pad_len: int = 4, enable_save: bool = False):
         if not self.online_user_ids:
             self.online_user_ids = random.choices(self.user_ids, k=int(self.split_ratio["online"]*len(self.user_ids)))
-        
+    
         candidate_user_ids = [user_id for user_id in self.user_ids if user_id not in self.online_user_ids]
-        train_user_ids = random.choices(candidate_user_ids, k=int((self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"]))*len(candidate_user_ids)))
-        valid_user_ids = [user_id for user_id in candidate_user_ids if user_id not in train_user_ids]
         
         data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
         if os.path.exists(data_path) and enable_save:
@@ -205,36 +235,19 @@ class DataManager():
             if enable_save:
                 self._save_seq_data(seq_data=seq_data, seq_len=seq_len)
         
-        train_seq_data, train_seq_len = {}, {}
-        valid_seq_data, valid_seq_len = {}, {}
-        train_seq_data.update({user_id: seq_data[user_id] for user_id in train_user_ids})
-        train_seq_len.update({user_id: seq_len[user_id] for user_id in train_user_ids})
-        valid_seq_data.update({user_id: seq_data[user_id] for user_id in valid_user_ids})
-        valid_seq_len.update({user_id: seq_len[user_id] for user_id in valid_user_ids})
+        candidate_seq_data, candidate_seq_len = {}, {}
+        candidate_seq_data.update({user_id: seq_data[user_id] for user_id in candidate_user_ids})
+        candidate_seq_len.update({user_id: seq_len[user_id] for user_id in candidate_user_ids})
 
-        class Dataset4Train(Dataset):
-            def __init__(self, seq_data: Dict, seq_len: Dict):
-                super(Dataset4Train, self).__init__()
-                assert set(seq_data.keys()) == set(seq_len.keys()), "user_id in seq_data and seq_len should be same"
-                self.user_ids = list(seq_data.keys())
-                self.user_ids.sort()
-                
-                self.seq_data = seq_data
-                self.seq_len = seq_len
-                            
-            def __len__(self):
-                return len(self.seq_data)
+        # use 0 to (self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"])) samples to train
+        # use (self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"])) to 1 samples to valid
+        split_ratio = {
+            "train": (0, (self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"]))), 
+            "valid": ((self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"])), 1)
+        }
 
-            def __getitem__(self, idx):
-                user_id = self.user_ids[idx]
-                x = self.seq_data[user_id][:,:-1] # feat
-                y = self.seq_data[user_id][:,-1]  # label
-                m = self.seq_len[user_id]   # mask
-                return (x, y, m)
-        
-        train = Dataset4Train(seq_data=train_seq_data, seq_len=train_seq_len)
-        valid = Dataset4Train(seq_data=valid_seq_data, seq_len=valid_seq_len)
-        return (train, valid)
+        dataset = Dataset4Trainer(seq_data=candidate_seq_data, seq_len=candidate_seq_len, split_ratio=split_ratio) 
+        return dataset
 
     def set_session(self, user_id: int = None, enable_overlap: bool = False):   # to simulate online checking and offline training
         assert self.online_user_ids and self.user_ids and self.item_ids and self.label_ids, "load data and setup online checker first"

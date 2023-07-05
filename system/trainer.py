@@ -7,23 +7,23 @@ from base import MLP, BatchNormTrans, FM, DeepFM, PNN, ESMM, ESMM2, MMoE, DIN
 
 
 class BaseTrainer(nn.Module):
-    def __init__(self, num_feat: int, input_size: int):
+    def __init__(self, num_val: int, input_size: int):
         super(BaseTrainer, self).__init__()
-        self.embedding = nn.Embedding(num_feat, input_size)
+        self.embedding = nn.Embedding(num_val, input_size)
         self.model = None
         self.requires_mlp = True
     
     def _load_model(self):
         raise NotImplementedError
 
-    def foward(self, x: Tensor, label_size: int):
+    def foward(self, x: Tensor, seq_len: int):
         raise NotImplementedError
 
 
 class TowerTrainer(BaseTrainer):
-    def __init__(self, num_feat: int, input_size: int, hidden_sizes: List[int], 
+    def __init__(self, num_val: int, input_size: int, num_feat: int, hidden_sizes: List[int], 
                     dropout: float = 0.5, model_name: str = "fm"): 
-        super().__init__(num_feat=num_feat, input_size=input_size)
+        super().__init__(num_val=num_val, input_size=input_size)
         self.model_name = model_name
         self.mlp = MLP(input_size=input_size, hidden_sizes=hidden_sizes, norm_layer=BatchNormTrans, dropout=dropout)
         self.model = self._load_model(model_name = model_name, input_size=input_size, hidden_sizes=hidden_sizes, 
@@ -67,12 +67,12 @@ class TowerTrainer(BaseTrainer):
         else:
             raise NotImplementedError
 
-    def forward(self, x: Tensor, label_size: int):
+    def forward(self, x: Tensor, seq_len: int):
         if self.model_name in ["esmm", "esmm2", "mmoe"]:
-            x = self.embedding(x[:, -label_size:]).mean(-2)
+            x = self.embedding(x[:, -seq_len:]).mean(-2)
             x = self.model(x)  # (B, L, H)/(B, L)
         else:
-            x = self.model(x[:, -label_size:])  # (B, L, F)
+            x = self.model(x[:, -seq_len:])  # (B, L, F)
 
         if self.requires_mlp:
             x = self.mlp(x)
@@ -80,9 +80,9 @@ class TowerTrainer(BaseTrainer):
 
 
 class SequenceTrainer(BaseTrainer):
-    def __init__(self, num_feat: int, input_size: int, hidden_size: int, 
+    def __init__(self, num_val: int, input_size: int, hidden_size: int, 
                     pre_hidden_sizes: List[int], dropout: float = 0.5, model_name: str = "lstm"): 
-        super().__init__(num_feat=num_feat, input_size=input_size)
+        super().__init__(num_val=num_val, input_size=input_size)
         self.mlp = MLP(input_size=hidden_size, hidden_sizes=pre_hidden_sizes, norm_layer=BatchNormTrans, dropout=dropout)
         self.model = self._load_model(model_name=model_name, input_size=input_size, dropout=dropout)
     
@@ -97,15 +97,15 @@ class SequenceTrainer(BaseTrainer):
             print(f"{model_name} must be in [lstm, gru, din]")
             raise NotImplementedError
 
-    def forward(self, x: Tensor, label_size: int):
+    def forward(self, x: Tensor, seq_len: int):
         x = self.embedding(x).mean(-2)
         x = self.model(x)
         x = x[0] if isinstance(x, tuple) else x
-        x = self.mlp(x[:, -label_size:])
+        x = self.mlp(x[:, -seq_len:])
         return x.squeeze(-1).sigmoid()
 
 
 class GraphTrainer(BaseTrainer):
-    def __init__(self, num_feat: int, input_size: int):
-        super().__init__(num_feat=num_feat, input_size=input_size)
+    def __init__(self, num_val: int, input_size: int):
+        super().__init__(num_val=num_val, input_size=input_size)
         raise NotImplementedError
