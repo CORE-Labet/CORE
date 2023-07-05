@@ -52,7 +52,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", help="random seed", default=0, type=int)
     parser.add_argument("--cuda", help="gpu device", default=0, type=int)
     parser.add_argument("--dataset", help="name of dataset", default="taobao", choices=["taobao", "tmall", "alipay", "amazon", "movielen"])
-    parser.add_argument("--split_ratio", help="split ratio of splitting dataset into offline_train, offline_validation and online_checking datasets", default={"train": 0.6, "valid": 0.2, "online": 0.2}, type=Dict)
+    parser.add_argument("--split_ratio", help="split ratio of splitting dataset into offline_train, offline_validation datasets", default={"train": (0, 0.8), "valid": (0.8, 1)}, type=Dict)
+    parser.add_argument("--online_ratio", help="split ratio of splitting user_ids into online_user_ids", default=0.2, type=float)
     parser.add_argument("--num_session", help="number of sessions", default=4, type=int)
     parser.add_argument("--num_turn", help="number of turns per session", default=4, type=int)
     parser.add_argument("--failure_penalty", help="penlty of number of turns for each session", default=3, type=int)
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     parser.add_argument("--penalty_weight", help="weight for the penalty", default=0.0, type=float)
     parser.add_argument("--cold_start", help="let the recommender system cold-start", action="store_true")
 
-    parser.add_argument("--trainer", help="name of trainer", default="fm", choices=["fm", "deepfm", "pnn", "esmm", "esmm2", "mmoe", "lstm", "gru", "din"])
+    parser.add_argument("--trainer", help="name of trainer", default="esmm", choices=["fm", "deepfm", "pnn", "esmm", "esmm2", "mmoe", "lstm", "gru", "din"])
     parser.add_argument("--input_size", help="size of input layer", default=48, type=int)
     parser.add_argument("--hidden_size", help="size of hidden layers", default=64, type=int)
     parser.add_argument("--dropout", help="dropout", default=0.5, type=float)
@@ -85,14 +86,15 @@ if __name__ == "__main__":
     parser.add_argument("--lr", help="learning rate", default=1e-2, type=float)
     parser.add_argument("--min_lr", help="min learning rate to clip", default=5e-4, type=float)
     parser.add_argument("--l2_reg", help="weight for l2 regularization", default=1e-4, type=float)
-    parser.add_argument("--batch_size", help="batch size for training", default=128, type=int)
-    parser.add_argument("--pad_len", help="padding len of each sequence of user", default=8, type=int)
-    parser.add_argument("--num_workers", help="number of workers for dataloader", default=6, type=int)
+    parser.add_argument("--batch_size", help="batch size for training", default=4, type=int)
+    parser.add_argument("--pad_len", help="padding len of each sequence of user", default=10, type=int)
+    parser.add_argument("--num_workers", help="number of workers for dataloader", default=1, type=int)
+    parser.add_argument("--save_path", help="path to save trainer", default="", type=str)
 
     args = parser.parse_args()
     device = "cpu" if args.cuda < 0 else f"cuda:{args.cuda}"
     args.device = torch.device(device)
-
+ 
     run_data_dealer(args=args, redo=True)  # check whether data are pre-processed
     # run_evaluate_online_checker(args=args)
     run_evaluate_offline_trainer(args=args)

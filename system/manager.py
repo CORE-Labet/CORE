@@ -31,18 +31,18 @@ class Dataset4Trainer(Dataset):
         self.split_locs = self.split_ratio[mode]
 
     def __getitem__(self, idx):
+        assert self.split_locs, "please set mode first: train or valid"
         user_id = self.user_ids[idx]
         seq_data = self.seq_data[user_id]
-        begin, end = int(len(seq_data) * self.split_locs[0]), int(len(seq_data) * self.split_locs[1])
+        seq_len = self.seq_len[user_id]
+        begin, end = int(seq_len * self.split_locs[0]), int(seq_len * self.split_locs[1])
         x = seq_data[:end,:-1] # feat
         y = seq_data[begin:end,-1]  # label
-        m = self.seq_len[user_id]   # mask
-        return (x, y, m)
+        return (x, y)
 
 
 class DataManager():
-    def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None, 
-                            split_ratio: Dict = {"train": 0.6, "valid": 0.2, "online": 0.2}):
+    def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None):
         self.data_name = data_name
         if not data_path:
             assert data_name, "at least one of data_path and data_name should be vaild"
@@ -55,15 +55,13 @@ class DataManager():
         self.user_ids = []
         self.item_ids = []
         self.retriever = retriever
-        self.split_ratio = split_ratio  # offline_train: offline_valid: online_check
-        assert sum(self.split_ratio.values()) == 1
 
         # online checking
         self.session_id = 0
         self.session2user = {}  # map from session_id to user_id
         self.all_user_matrix, self.all_item_matrix, self.all_interaction_matrix = None, None, None  # data for storage
-        self.online_user_ids = []   # data for online checker
-    
+        self.online_user_ids = []   # include all the online_user_ids
+
     def set_retriever(self, num_candidate_items: int = None, pos_neg_ratio: float = None):
         self.retriever.num_candidate_items = num_candidate_items if num_candidate_items else self.retriever.num_candidate_items
         self.retriever.pos_neg_ratio = pos_neg_ratio if pos_neg_ratio else self.retriever.pos_neg_ratio
@@ -156,31 +154,20 @@ class DataManager():
         with open(data_path, "wb") as f:
             pickle.dump((self.all_user_matrix, self.all_item_matrix, self.all_interaction_matrix), f)
 
-    def set_online_checker(self, online_label_ids: Dict[int, List[int]] = None):
-        if online_label_ids:
-            candidate_user_ids = list(online_label_ids.keys())
-            assert not [user_id for user_id in candidate_user_ids if user_id not in self.user_ids]
-            self.online_user_ids = candidate_user_ids
-        else:
-            if self.online_user_ids:
-                candidate_user_ids = self.online_user_ids
-            else:
-                candidate_user_ids = random.choices(self.user_ids, k=int((1-self.split_ratio["online"])*len(self.user_ids)))
-                self.online_user_ids = candidate_user_ids
-            
-            online_label_ids = {}
-            for user_id in self.online_user_ids:
-                online_label_ids[user_id] = self.label_ids[user_id]
-        
+    def set_online_checker(self, online_user_ids: List[int] = None, online_ratio: float = 0.2):
         self.session_id = 0
         self.session2user = {}
-        return len(self.online_user_ids)
-
-    def _compute_seq_data(self, pad_len: int):
-        seq_data, seq_len = {}, {}
-        user_ids = set(self.all_interaction_matrix[:,0].tolist())
         
-        for user_id in user_ids:
+        if not online_user_ids:
+            online_user_ids = random.choices(self.user_ids, k=int(online_ratio*len(self.user_ids)))
+        
+        self.online_user_ids = online_user_ids
+       
+    def _compute_seq_data(self, pad_len: int):
+        all_seq_data, all_seq_len = {}, {}
+        all_user_ids = set(self.all_interaction_matrix[:,0].tolist())
+        
+        for user_id in all_user_ids:
             _user_matrix = self.all_user_matrix[self.all_user_matrix[:,0] == user_id]
             _interaction_matrix = self.all_interaction_matrix[self.all_interaction_matrix[:,0] == user_id]
             _label_matrix = _interaction_matrix[:,-1].tolist()   # last col is label
@@ -197,56 +184,40 @@ class DataManager():
                     _item_matrix = np.full(shape=_item_matrix.shape, fill_value=-1)
                     _item_matrices.append(_item_matrix)
                 _label_matrix.extend([-1 for _ in range(len2pad)])
-                seq_len.update({user_id: pad_len - len2pad})
+                all_seq_len.update({user_id: pad_len - len2pad})
             elif len(_item_matrices) > pad_len:
                 _item_matrices = _item_matrices[-pad_len:]
                 _label_matrix = _label_matrix[-pad_len:]
-                seq_len.update({user_id: pad_len})
+                all_seq_len.update({user_id: pad_len})
             else:
-                seq_len.update({user_id: pad_len})
+                all_seq_len.update({user_id: pad_len})
 
             _item_matrices = np.concatenate(_item_matrices, axis=0)
             _label_matrix = np.array(_label_matrix)[:,np.newaxis]
             _item_matrices = np.concatenate((_item_matrices, _label_matrix), axis=-1)
-            seq_data.update({user_id: _item_matrices})
+            all_seq_data.update({user_id: _item_matrices})
 
-        return (seq_data, seq_len)
+        return (all_seq_data, all_seq_len)
     
-    def _save_seq_data(self, seq_data: Dict, seq_len: Dict):
+    def _save_seq_data(self, all_seq_data: Dict, all_seq_len: Dict):
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path, exist_ok=True)
         
         data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
         with open(data_path, "wb") as f:
-            pickle.dump((seq_data, seq_len), f)
+            pickle.dump((all_seq_data, all_seq_len), f)
     
-    def set_offline_trainer(self, pad_len: int = 4, enable_save: bool = False):
-        if not self.online_user_ids:
-            self.online_user_ids = random.choices(self.user_ids, k=int(self.split_ratio["online"]*len(self.user_ids)))
-    
-        candidate_user_ids = [user_id for user_id in self.user_ids if user_id not in self.online_user_ids]
-        
+    def set_offline_trainer(self, pad_len: int = 4, split_ratio: Dict = {"train": (0, 0.8), "valid": (0.8, 1)}, enable_save: bool = False):            
         data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
         if os.path.exists(data_path) and enable_save:
             with open(data_path, "wb") as f:
-                seq_data, seq_len = pickle.load(f)
+                all_seq_data, all_seq_len = pickle.load(f)
         else:
-            seq_data, seq_len = self._compute_seq_data(pad_len=pad_len)
+            all_seq_data, all_seq_len = self._compute_seq_data(pad_len=pad_len)
             if enable_save:
-                self._save_seq_data(seq_data=seq_data, seq_len=seq_len)
-        
-        candidate_seq_data, candidate_seq_len = {}, {}
-        candidate_seq_data.update({user_id: seq_data[user_id] for user_id in candidate_user_ids})
-        candidate_seq_len.update({user_id: seq_len[user_id] for user_id in candidate_user_ids})
+                self._save_seq_data(all_seq_data=all_seq_data, all_seq_len=all_seq_len)
 
-        # use 0 to (self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"])) samples to train
-        # use (self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"])) to 1 samples to valid
-        split_ratio = {
-            "train": (0, (self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"]))), 
-            "valid": ((self.split_ratio["train"]/(self.split_ratio["train"]+self.split_ratio["valid"])), 1)
-        }
-
-        dataset = Dataset4Trainer(seq_data=candidate_seq_data, seq_len=candidate_seq_len, split_ratio=split_ratio) 
+        dataset = Dataset4Trainer(seq_data=all_seq_data, seq_len=all_seq_len, split_ratio=split_ratio) 
         return dataset
 
     def set_session(self, user_id: int = None, enable_overlap: bool = False):   # to simulate online checking and offline training

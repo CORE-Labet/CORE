@@ -6,7 +6,7 @@ import pickle
 
 from user import UserAgent
 from agent import ConversationalAgent
-from data import DataManager
+from manager import DataManager
 from trainer import TowerTrainer, SequenceTrainer
 from retriever import TimeRetriever, RandomRetriever
 from checker import ItemChecker, AttributeChecker, CoreChecker
@@ -97,7 +97,7 @@ def load_trainer(args, num_val, num_feat):
 def evaluate_offline_trainer(args):
     set_seed(args.seed)
     retriever = load_retriever(args)
-    manager = DataManager(data_name=args.dataset, retriever=retriever, split_ratio=args.split_ratio)
+    manager = DataManager(data_name=args.dataset, retriever=retriever)
     manager.load()
     print("====== LOAD DATA =====")
     num_val, num_feat = manager.get_statics()
@@ -109,8 +109,8 @@ def evaluate_offline_trainer(args):
         checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
     )
     
-    train, valid = manager.set_offline_trainer(pad_len=args.pad_len)
-    best_auc = conversational_agent.train(args=args, train=train, valid=valid)
+    dataset = manager.set_offline_trainer(pad_len=args.pad_len, split_ratio=args.split_ratio)
+    best_auc = conversational_agent.train(args=args, dataset=dataset)
     return best_auc
 
 def evaluate_online_checker(args):
@@ -121,7 +121,7 @@ def evaluate_online_checker(args):
     print("====== LOAD DATA =====")
     num_val, num_feat = manager.get_statics()
     
-    max_session_id = manager.set_online_checker()
+    max_session_id = manager.set_online_checker(online_ratio=args.online_ratio)
     num_session = min(max_session_id, args.num_session)
 
     checker = load_checker(args)

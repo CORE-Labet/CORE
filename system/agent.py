@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import os
 
 from tqdm import tqdm
 from sklearn.metrics import roc_auc_score
@@ -144,31 +145,20 @@ class ConversationalAgent():
     
     @staticmethod
     def _evaluate_with_criterion(y_, y, criterion, threshold: float = 0.5):
+        if y.dtype != torch.float32:
+            y = y.to(torch.float32)
         loss = criterion(y_, y)
         acc = torch.mean(torch.eq(y_ >= threshold, y), dtype=torch.float).item()
         y_, y = [_.view(-1).detach().cpu().numpy() for _ in (y_, y)]
         return (loss, acc, roc_auc_score(y_true=y, y_score=y_))
     
     def _train_trainer(self, args, dataloader, optimizer, scheduler, criterion):
-        self.trainer.to(args.device)
         self.trainer.train()
 
-        dataloader.set_mode("train")
         for data in tqdm(dataloader):
-            print(data)
-            print(type(data))
             data = [_.to(args.device, non_blocking=True) for _ in data]
-            x, y, m = data
-
-            print("===== DEBUG =====")
-            print("x", x)
-            print("y", y)
-            print("m", m)
-            print(y.shape[1])
-            
-            
+            x, y = data
             y_ = self.trainer(x, y.shape[1])
-            exit()
             loss, acc, auc = self._evaluate_with_criterion(y_=y_, y=y, criterion=criterion)
             optimizer.zero_grad()
             loss.backward()
@@ -179,8 +169,6 @@ class ConversationalAgent():
     def _evaluate_trainer(self, args, dataloader, criterion):
         self.trainer.eval()
         res = []
-
-        dataloader.set_mode("valid")
         with torch.no_grad():
             for data in tqdm(dataloader):
                 x, y = data
@@ -192,20 +180,33 @@ class ConversationalAgent():
         return (loss, acc, auc)
 
     def train(self, args, dataset: Dataset):
+        self.trainer.to(args.device)
+
         optimizer = torch.optim.AdamW(self.trainer.parameters(), lr=args.lr, weight_decay=args.l2_reg)
         criterion = torch.nn.BCELoss()
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="max", factor=0.9, 
                             patience=len(dataset)//(args.batch_size*5), verbose=True, min_lr=args.min_lr)
         dataloader = DataLoader(dataset=dataset)
+
+        if not args.save_path:
+            current_path = os.path.abspath(os.getcwd())
+            save_path = os.path.join(os.path.dirname(current_path), "log/")
+        else:
+            save_path = args.save_path
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True) 
+        save_path = os.path.join(save_path, f"{args.trainer}.pt")
         
         best_auc = 0
         for _ in range(args.epochs):
+            dataset.set_mode("train")
             self._train_trainer(args=args, dataloader=dataloader, optimizer=optimizer, scheduler=scheduler, criterion=criterion)
+            dataset.set_mode("valid")
             res = self._evaluate_trainer(args=args, dataloader=dataloader, criterion=criterion)
             auc = res[-1]
             if auc > best_auc:
                 best_auc = auc
-                torch.save(self.trainer.state_dict(), args.save_path)
+                torch.save(self.trainer.state_dict(), save_path)
         return best_auc
 
     def check_with_render(self, response: str) -> str:
