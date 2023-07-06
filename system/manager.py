@@ -9,7 +9,7 @@ from collections import Counter
 from retriever import BaseRetriever
 
 
-# organize data for trainer
+# organize data for offline trainer
 class Dataset4Trainer(Dataset):
     def __init__(self, seq_data: Dict, seq_len: Dict, split_ratio: Dict):
         super(Dataset4Trainer, self).__init__()
@@ -41,8 +41,27 @@ class Dataset4Trainer(Dataset):
         return (x, y)
 
 
+# organize session data for online checker
+class Dataset4Checker(Dataset):
+    def __init__(self, seq_data: list, seq_len: int):
+        super(Dataset4Checker, self).__init__()
+        self.seq_data = seq_data
+        self.seq_len = seq_len
+
+    def __len__(self):
+        return len(self.seq_data)
+    
+    def __getitem__(self, idx):
+        begin, end = self.seq_len, self.seq_len + 1
+        seq_data = self.seq_data[idx]
+        x = seq_data[:end,:-1]  # feat
+        y = seq_data[begin:end,-1]  # label
+        return (x, y)
+
+
 class DataManager():
-    def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None):
+    def __init__(self, data_name: str, data_path: str = None, retriever: BaseRetriever = None, 
+                        score_func: str = "embedding", pad_len: int = 8):
         self.data_name = data_name
         if not data_path:
             assert data_name, "at least one of data_path and data_name should be vaild"
@@ -61,6 +80,10 @@ class DataManager():
         self.session2user = {}  # map from session_id to user_id
         self.all_user_matrix, self.all_item_matrix, self.all_interaction_matrix = None, None, None  # data for storage
         self.online_user_ids = []   # include all the online_user_ids
+        self.score_func = score_func
+
+        # offline training
+        self.pad_len = pad_len
 
     def set_retriever(self, num_candidate_items: int = None, pos_neg_ratio: float = None):
         self.retriever.num_candidate_items = num_candidate_items if num_candidate_items else self.retriever.num_candidate_items
@@ -163,7 +186,7 @@ class DataManager():
         
         self.online_user_ids = online_user_ids
        
-    def _compute_seq_data(self, pad_len: int):
+    def _compute_seq_data(self):
         all_seq_data, all_seq_len = {}, {}
         all_user_ids = set(self.all_interaction_matrix[:,0].tolist())
         
@@ -178,19 +201,19 @@ class DataManager():
                 _item_matrix = np.concatenate((_user_matrix, _item_matrix), axis=-1) # concat user_feat and item_feat to make item_feat
                 _item_matrices.append(_item_matrix)
 
-            if len(_item_matrices) < pad_len:
-                len2pad = pad_len - len(_item_matrices)
+            if len(_item_matrices) < self.pad_len:
+                len2pad = self.pad_len - len(_item_matrices)
                 for _ in range(len2pad):
                     _item_matrix = np.full(shape=_item_matrix.shape, fill_value=-1)
                     _item_matrices.append(_item_matrix)
                 _label_matrix.extend([-1 for _ in range(len2pad)])
-                all_seq_len.update({user_id: pad_len - len2pad})
-            elif len(_item_matrices) > pad_len:
-                _item_matrices = _item_matrices[-pad_len:]
-                _label_matrix = _label_matrix[-pad_len:]
-                all_seq_len.update({user_id: pad_len})
+                all_seq_len.update({user_id: self.pad_len - len2pad})
+            elif len(_item_matrices) > self.pad_len:
+                _item_matrices = _item_matrices[-self.pad_len:]
+                _label_matrix = _label_matrix[-self.pad_len:]
+                all_seq_len.update({user_id: self.pad_len})
             else:
-                all_seq_len.update({user_id: pad_len})
+                all_seq_len.update({user_id: self.pad_len})
 
             _item_matrices = np.concatenate(_item_matrices, axis=0)
             _label_matrix = np.array(_label_matrix)[:,np.newaxis]
@@ -207,20 +230,20 @@ class DataManager():
         with open(data_path, "wb") as f:
             pickle.dump((all_seq_data, all_seq_len), f)
     
-    def set_offline_trainer(self, pad_len: int = 4, split_ratio: Dict = {"train": (0, 0.8), "valid": (0.8, 1)}, enable_save: bool = False):            
+    def set_offline_trainer(self, split_ratio: Dict = {"train": (0, 0.8), "valid": (0.8, 1)}, enable_save: bool = False):            
         data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
         if os.path.exists(data_path) and enable_save:
             with open(data_path, "wb") as f:
                 all_seq_data, all_seq_len = pickle.load(f)
         else:
-            all_seq_data, all_seq_len = self._compute_seq_data(pad_len=pad_len)
+            all_seq_data, all_seq_len = self._compute_seq_data()
             if enable_save:
                 self._save_seq_data(all_seq_data=all_seq_data, all_seq_len=all_seq_len)
 
         dataset = Dataset4Trainer(seq_data=all_seq_data, seq_len=all_seq_len, split_ratio=split_ratio) 
         return dataset
 
-    def set_session(self, user_id: int = None, enable_overlap: bool = False):   # to simulate online checking and offline training
+    def set_session(self, user_id: int = None, enable_overlap: bool = False, enable_save: bool = False):   # to simulate online checking and offline training
         assert self.online_user_ids and self.user_ids and self.item_ids and self.label_ids, "load data and setup online checker first"
         if not user_id:
             if not enable_overlap:
@@ -246,8 +269,25 @@ class DataManager():
         candidate_label_item_ids = list(set(self.label_ids[user_id]) & set(candidate_item_ids))
         candidate_label_attribute_ids = self._compute_label_attribute_ids(data_matrix=candidate_item_matrix, label_ids=candidate_label_item_ids)
 
-        # item embedding and user embedding exist cases -> scores
-        # not exists -> rule
+        if self.score_func == "embedding":
+            raise NotImplementedError
+        
+        elif self.score_func == "model":
+            data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
+            if os.path.exists(data_path) and enable_save:
+                with open(data_path, "wb") as f:
+                    all_seq_data, all_seq_len = pickle.load(f)
+            else:
+                all_seq_data, all_seq_len = self._compute_seq_data()
+                if enable_save:
+                    self._save_seq_data(all_seq_data=all_seq_data, all_seq_len=all_seq_len)
+            
+            seq_data, seq_len = all_seq_data[user_id], all_seq_len[user_id]
+            print("===== DEBUG =====")
+
+        else:
+            raise NotImplementedError
+    
         return (candidate_item_matrix, candidate_label_item_ids, candidate_label_attribute_ids)
 
     def _compute_label_attribute_ids(self, data_matrix: np.ndarray, label_ids: List[int]): 
