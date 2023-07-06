@@ -27,19 +27,19 @@ class TowerTrainer(BaseTrainer):
         self.model_name = model_name
         self.mlp = MLP(input_size=input_size, hidden_sizes=hidden_sizes, norm_layer=BatchNormTrans, dropout=dropout)
         self.model = self._load_model(model_name = model_name, input_size=input_size, hidden_sizes=hidden_sizes, 
-                                        num_feat=num_feat, dropout=dropout)
+                                        num_val=num_val, dropout=dropout, num_feat=num_feat)
     
-    def _load_model(self, model_name, input_size, hidden_sizes, num_feat, dropout):
+    def _load_model(self, model_name, input_size, hidden_sizes, num_val, dropout, num_feat):
         if model_name in ["fm", "deepfm", "pnn"]:
-            return self._load_fm_model(model_name=model_name, input_size=input_size, num_feat=num_feat)
+            return self._load_fm_model(model_name=model_name, input_size=input_size, num_val=num_val, num_feat=num_feat)
         elif model_name in ["esmm", "esmm2", "mmoe"]:
             return self._load_expert_model(model_name=model_name, input_size=input_size, hidden_sizes=hidden_sizes, dropout=dropout)
         else:
             print(f"{model_name} must be in [fm, deepfm, pnn, esmm, esmm2, mmoe]")
             raise NotImplementedError
 
-    def _load_fm_model(self, model_name: str, input_size: int, num_feat: int):
-        w1 = nn.Embedding(num_feat, 1)
+    def _load_fm_model(self, model_name: str, input_size: int, num_val: int, num_feat: int):
+        w1 = nn.Embedding(num_val, 1)
         if model_name == "fm":
             self.requires_mlp = True
             return FM(w1=w1, v=self.embedding, num_feat=num_feat, point_dot=False)

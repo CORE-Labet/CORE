@@ -245,6 +245,9 @@ class DataManager():
 
         candidate_label_item_ids = list(set(self.label_ids[user_id]) & set(candidate_item_ids))
         candidate_label_attribute_ids = self._compute_label_attribute_ids(data_matrix=candidate_item_matrix, label_ids=candidate_label_item_ids)
+
+        # item embedding and user embedding exist cases -> scores
+        # not exists -> rule
         return (candidate_item_matrix, candidate_label_item_ids, candidate_label_attribute_ids)
 
     def _compute_label_attribute_ids(self, data_matrix: np.ndarray, label_ids: List[int]): 
