@@ -92,9 +92,9 @@ def load_trainer(args, num_val, num_feat):
         )
     else:
         raise NotImplementedError
-    return trainer
+    return trainer    
 
-def evaluate_offline_trainer(args):
+def load_agent(args):
     set_seed(args.seed)
     retriever = load_retriever(args)
     manager = DataManager(
@@ -103,30 +103,6 @@ def evaluate_offline_trainer(args):
     manager.load()
     print("====== LOAD DATA =====")
     num_val, num_feat = manager.get_statics()
-
-    checker = load_checker(args)
-    render = load_render(args)
-    trainer = load_trainer(args, num_val=num_val, num_feat=num_feat)
-    conversational_agent = ConversationalAgent(
-        checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
-    )
-    
-    dataset = manager.set_offline_trainer(split_ratio=args.split_ratio)
-    best_auc = conversational_agent.train(args=args, dataset=dataset)
-    return best_auc
-
-def evaluate_online_checker(args):
-    set_seed(args.seed)
-    retriever = load_retriever(args)
-    manager = DataManager(
-        data_name=args.dataset, retriever=retriever, pad_len=args.pad_len, score_func=args.score_func
-    )
-    manager.load()
-    print("====== LOAD DATA =====")
-    num_val, num_feat = manager.get_statics()
-    
-    max_session_id = manager.set_online_checker(online_ratio=args.online_ratio)
-    num_session = min(max_session_id, args.num_session)
 
     checker = load_checker(args)
     render = load_render(args)
@@ -138,12 +114,23 @@ def evaluate_online_checker(args):
         max_turn=args.max_turn, enable_not_know=args.enable_not_know, enable_quit=args.enable_quit,
         num_not_know=args.num_not_know, render=render
     )
+    return (manager, conversational_agent, user_agent)
+
+
+def evaluate_offline_trainer(args, manager: DataManager, conversational_agent: ConversationalAgent):
+    dataset = manager.set_offline_trainer(split_ratio=args.split_ratio)
+    best_auc = conversational_agent.train(args=args, dataset=dataset)
+    return (best_auc, conversational_agent.trainer)
+
+def evaluate_online_checker(args, manager: DataManager, conversational_agent: ConversationalAgent, user_agent: UserAgent, use_store: bool = False):
+    max_session_id = manager.set_online_checker(online_ratio=args.online_ratio)
+    num_session = min(max_session_id, args.num_session)
 
     num_turn, success_rate = [], []
     failure_turn = args.num_turn + args.failure_penalty
     for session_id in range(num_session):
         print(f"====== SESSION {session_id} =====")
-        data_matrix, label_item_ids, label_attribute_ids = manager.set_session(trainer=trainer, device=args.device)
+        data_matrix, label_item_ids, label_attribute_ids = manager.set_session(trainer=conversational_agent.trainer, device=args.device)
         conversational_agent.set_session(session_id=session_id, data_matrix=data_matrix)
         user_agent.set_session(session_id=session_id, label_item_ids=label_item_ids, label_attribute_ids=label_attribute_ids)
         
@@ -177,5 +164,5 @@ def evaluate_online_checker(args):
             else:
                 num_turn.append(failure_turn)
                 success_rate.append(0)
-    
-    return np.mean(num_turn), np.mean(success_rate)
+        
+    return (np.mean(num_turn), np.mean(success_rate))

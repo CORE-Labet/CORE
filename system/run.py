@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 
 from typing import List, Dict
-from evaluator import evaluate_online_checker, evaluate_offline_trainer
+from evaluator import load_agent, evaluate_online_checker, evaluate_offline_trainer
 
 # data is organized into three np.ndarry to store:
 # user_matrix: 1st col: user_ids
@@ -37,14 +37,14 @@ def run_data_dealer(args, redo=False):
             pickle.dump((user_matrix, item_matrix, interaction_matrix), f)
     
 
-def run_evaluate_online_checker(args):
-    average_turn, average_success_rate = evaluate_online_checker(args)
+def run(args):
+    manager, conversational_agent, user_agent = load_agent(args)
+    if args.use_tune:
+        best_auc, trainer = evaluate_offline_trainer(args, manager, conversational_agent)
+        print(f"===== BEST AUC: {best_auc} =====")
+        conversational_agent.trainer = trainer
+    average_turn, average_success_rate = evaluate_online_checker(args, manager, conversational_agent, user_agent)
     print(f"===== AVG TRUN: {average_turn}, AVG SR: {average_success_rate} =====")
-
-def run_evaluate_offline_trainer(args):
-    best_auc = evaluate_offline_trainer(args)
-    print(f"===== BEST AUC: {best_auc} =====")
-
 
 
 if __name__ == "__main__":
@@ -57,7 +57,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_session", help="number of sessions", default=4, type=int)
     parser.add_argument("--num_turn", help="number of turns per session", default=4, type=int)
     parser.add_argument("--failure_penalty", help="penlty of number of turns for each session", default=3, type=int)
-
+    
+    parser.add_argument("--use_tune", help="tune trainer or not", action="store_true")
     parser.add_argument("--retriever", help="name of retriever", default="random", choices=["time", "random"])
     parser.add_argument("--candidate_items", help="number of candidate items per session", default=30, type=int)
     parser.add_argument("--pos_neg_ratio", help="ratio of positive and negative items in data sampling", default=0.1, type=float)
@@ -96,6 +97,5 @@ if __name__ == "__main__":
     device = "cpu" if args.cuda < 0 else f"cuda:{args.cuda}"
     args.device = torch.device(device)
  
-    run_data_dealer(args=args, redo=True)  # check whether data are pre-processed
-    run_evaluate_online_checker(args=args)
-    # run_evaluate_offline_trainer(args=args)
+    run_data_dealer(args=args, redo=True)  # generate sampled data
+    run(args=args)

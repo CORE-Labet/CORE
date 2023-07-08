@@ -164,15 +164,17 @@ class ConversationalAgent():
 
     def _evaluate_trainer(self, args, dataloader, criterion):
         self.trainer.eval()
-        res = []
+        res_y_, res_y = [], []
         with torch.no_grad():
             for data in tqdm(dataloader):
                 x, y = data
                 x = x.to(args.device)
                 y_ = self.trainer(x, y.shape[1])
-                res.append((y_.cpu(), y))
-        res = [torch.cat(_) for _ in list(zip(*res))]
-        loss, acc, auc = self._evaluate_with_criterion(*res, criterion=criterion)
+                res_y.append(y)
+                res_y_.append(y_.cpu())
+        res_y = torch.cat(res_y)
+        res_y_ = torch.cat(res_y_)
+        loss, acc, auc = self._evaluate_with_criterion(y_=res_y_, y=res_y, criterion=criterion)
         return (loss, acc, auc)
 
     def train(self, args, dataset: Dataset):
