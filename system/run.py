@@ -90,11 +90,12 @@ if __name__ == "__main__":
     parser.add_argument("--pad_len", help="padding len of each sequence of user", default=10, type=int)
     parser.add_argument("--num_workers", help="number of workers for dataloader", default=1, type=int)
     parser.add_argument("--save_path", help="path to save trainer", default="", type=str)
+    parser.add_argument("--score_func", help="method to generate prediction scores", choices=["embedding", "model"], default="model", type=str)
 
     args = parser.parse_args()
     device = "cpu" if args.cuda < 0 else f"cuda:{args.cuda}"
     args.device = torch.device(device)
  
     run_data_dealer(args=args, redo=True)  # check whether data are pre-processed
-    # run_evaluate_online_checker(args=args)
-    run_evaluate_offline_trainer(args=args)
+    run_evaluate_online_checker(args=args)
+    # run_evaluate_offline_trainer(args=args)

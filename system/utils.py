@@ -351,3 +351,38 @@ class DataDealer():
                  begin_len=np.stack([begin_loc, behavior_len], axis=-1),
                  fields=num_field_feat,
                  )
+    
+    # def split_data(self, data_name):
+    #     data_path = os.path.join(self.data_path, f'TaoBao/{data_name}/raw_data')
+    #     with np.load(os.path.join(data_path, 'user_item.npz')) as f:
+    #         logs, begin_len, fields = f['log'], f['begin_len'], f['fields']
+    #     print(np.sum(fields))
+    #     logs = np.delete(logs, -2, -1)
+    #     logs = np.array(np.split(logs, begin_len[:, 0] + begin_len[:, 1])[:-1], dtype=object)
+    #     log_save = {'logs': logs, 'fields': fields}
+    #     save_dir = os.path.join(self.data_path, data_name)
+    #     os.makedirs(save_dir, exist_ok=True)
+    #     np.savez_compressed(os.path.join(save_dir, 'log.npz'), **log_save)
+
+    def split_data(self, data_name):
+        data_path = os.path.join(self.data_path, f'TaoBao/{data_name}/raw_data')
+        with np.load(os.path.join(data_path, 'user_item.npz')) as f:
+            logs, begin_len, fields = f['log'], f['begin_len'], f['fields']
+        item_dim = 1
+        if data_name == 'alipay':
+            item_dim = 2
+        logs_sub = logs[:, [0, item_dim, -2, -1]]
+        logs_sub = np.asarray(np.split(logs_sub, begin_len[:, 0] + begin_len[:, 1])[:-1], dtype=object)
+        user_slice = [0]
+        if data_name == 'tmall':
+            user_slice = [0, -5, -4]
+        users = np.asarray([log[0, user_slice] for log in np.split(logs, begin_len[:, 0] + begin_len[:, 1])[:-1]])
+        logs = np.delete(logs, user_slice + [-1, -2], -1)
+        if data_name == 'alipay':
+            logs[:, [0, 1]] = logs[:, [1, 0]]
+        items = logs[np.unique(logs[:, 0], return_index=True)[1]]
+        print(users.shape, items.shape)
+        log_save = {'users': users, 'items': items, 'logs': logs_sub}
+        save_dir = os.path.join(self.data_path, data_name)
+        os.makedirs(save_dir, exist_ok=True)
+        np.savez_compressed(os.path.join(save_dir, 'attr_split.npz'), **log_save)

@@ -97,7 +97,9 @@ def load_trainer(args, num_val, num_feat):
 def evaluate_offline_trainer(args):
     set_seed(args.seed)
     retriever = load_retriever(args)
-    manager = DataManager(data_name=args.dataset, retriever=retriever)
+    manager = DataManager(
+        data_name=args.dataset, retriever=retriever, pad_len=args.pad_len, score_func=args.score_func
+    )
     manager.load()
     print("====== LOAD DATA =====")
     num_val, num_feat = manager.get_statics()
@@ -109,14 +111,16 @@ def evaluate_offline_trainer(args):
         checker=checker, trainer=trainer, render=render, cold_start=args.cold_start
     )
     
-    dataset = manager.set_offline_trainer(pad_len=args.pad_len, split_ratio=args.split_ratio)
+    dataset = manager.set_offline_trainer(split_ratio=args.split_ratio)
     best_auc = conversational_agent.train(args=args, dataset=dataset)
     return best_auc
 
 def evaluate_online_checker(args):
     set_seed(args.seed)
     retriever = load_retriever(args)
-    manager = DataManager(data_name=args.dataset, retriever=retriever, split_ratio=args.split_ratio)
+    manager = DataManager(
+        data_name=args.dataset, retriever=retriever, pad_len=args.pad_len, score_func=args.score_func
+    )
     manager.load()
     print("====== LOAD DATA =====")
     num_val, num_feat = manager.get_statics()
@@ -139,7 +143,7 @@ def evaluate_online_checker(args):
     failure_turn = args.num_turn + args.failure_penalty
     for session_id in range(num_session):
         print(f"====== SESSION {session_id} =====")
-        data_matrix, label_item_ids, label_attribute_ids = manager.set_session()
+        data_matrix, label_item_ids, label_attribute_ids = manager.set_session(trainer=trainer, device=args.device)
         conversational_agent.set_session(session_id=session_id, data_matrix=data_matrix)
         user_agent.set_session(session_id=session_id, label_item_ids=label_item_ids, label_attribute_ids=label_attribute_ids)
         

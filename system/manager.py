@@ -2,11 +2,13 @@ import numpy as np
 import random
 import os
 import pickle
+import torch
 
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from typing import List, Dict
 from collections import Counter
 from retriever import BaseRetriever
+from trainer import BaseTrainer
 
 
 # organize data for offline trainer
@@ -185,6 +187,9 @@ class DataManager():
             online_user_ids = random.choices(self.user_ids, k=int(online_ratio*len(self.user_ids)))
         
         self.online_user_ids = online_user_ids
+
+        max_session_id = len(self.online_user_ids)
+        return max_session_id
        
     def _compute_seq_data(self):
         all_seq_data, all_seq_len = {}, {}
@@ -243,7 +248,7 @@ class DataManager():
         dataset = Dataset4Trainer(seq_data=all_seq_data, seq_len=all_seq_len, split_ratio=split_ratio) 
         return dataset
 
-    def set_session(self, user_id: int = None, enable_overlap: bool = False, enable_save: bool = False):   # to simulate online checking and offline training
+    def set_session(self, trainer: BaseTrainer, device, user_id: int = None, enable_overlap: bool = False, enable_save: bool = False):   # to simulate online checking and offline training
         assert self.online_user_ids and self.user_ids and self.item_ids and self.label_ids, "load data and setup online checker first"
         if not user_id:
             if not enable_overlap:
@@ -262,6 +267,7 @@ class DataManager():
 
         pos_item_ids = self.label_ids[user_id]
         neg_item_ids = [idx for idx in self.item_ids if idx not in pos_item_ids]
+
         candidate_item_ids = self.retriever.sample_with_ratio(pos_item_ids=pos_item_ids, neg_item_ids=neg_item_ids)
         session_mask = np.isin(self.all_item_matrix[:, 0], candidate_item_ids)
         candidate_item_matrix = self.all_item_matrix[session_mask]
@@ -283,8 +289,37 @@ class DataManager():
                     self._save_seq_data(all_seq_data=all_seq_data, all_seq_len=all_seq_len)
             
             seq_data, seq_len = all_seq_data[user_id], all_seq_len[user_id]
-            print("===== DEBUG =====")
 
+            new_seq_data = []
+            for item_id in range(len(candidate_item_matrix)):
+                data = seq_data[:seq_len,:]
+                user_matrix = self.all_user_matrix[user_id]
+                item_matrix = candidate_item_matrix[item_id]
+                label = [-1]
+                
+                data2predict = np.concatenate((user_matrix, item_matrix, label))
+                data2predict = data2predict[np.newaxis,:]
+                data = np.concatenate((data, data2predict), axis=0)
+
+                if seq_len < len(seq_data):
+                    pad = seq_data[-(len(seq_data)-seq_len):,:]
+                    data = np.concatenate((data, pad), axis=0)
+                new_seq_data.append(data)
+
+            dataset = Dataset4Checker(seq_data=new_seq_data, seq_len=seq_len)
+            dataloader = DataLoader(dataset=dataset)
+            
+            trainer.to(device)
+            trainer.eval()
+            score = []
+            with torch.no_grad():
+                for data in dataloader:
+                    x, y = data
+                    x = x.to(device)
+                    y_ = trainer(x, y.shape[1])
+                    score.extend(y_.cpu().tolist())
+            score = np.array(score)
+            candidate_item_matrix = np.concatenate((candidate_item_matrix, score), axis=1)
         else:
             raise NotImplementedError
     

@@ -33,14 +33,10 @@ class ConversationalAgent():
     def set_session(self, session_id: int, data_matrix: np.ndarray):
         self.turn_id = 0
         self.session_id = session_id
+        self.data_matrix = data_matrix
+
         if self.cold_start:
-            predictions = np.zeros(data_matrix.shape[0])
-        else:
-            predictions = np.random.choice([0., 1.], size=data_matrix.shape[0])
-            # predictions = self.trainer()
-        predictions = predictions[:,np.newaxis]
-        
-        self.data_matrix = np.concatenate((data_matrix, predictions), axis=1)
+            self.data_matrix[:,-1] = 1
 
         self.item_ids = data_matrix[:,0].astype(int).tolist()
         self.attribute_ids = {} 
