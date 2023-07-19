@@ -40,10 +40,14 @@ class UserAgent():
         print("LABEL ATTRIBUTES: ", self.label_attribute_ids)
     
     def _reponse_item(self, query_item_ids: List[int]):
+        label_query_item_ids = []
         for query_item_id in query_item_ids:
             if query_item_id in self.label_item_ids:
-                return YES_SINGAL
-        return NO_SINGAL
+                label_query_item_ids.append(query_item_id)
+        if label_query_item_ids == []:
+            return NO_SINGAL
+        else:
+            return (YES_SINGAL, label_query_item_ids)
     
     def _reponse_attribute(self, query_attribute_id: int):
         return self.label_attribute_ids[query_attribute_id]

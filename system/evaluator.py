@@ -12,7 +12,7 @@ from retriever import TimeRetriever, RandomRetriever
 from checker import ItemChecker, AttributeChecker, CoreChecker
 from render import RuleRender, LMRender
 
-from render import QUIT_SINGAL, YES_SINGAL
+from render import QUIT_SINGAL, YES_SINGAL, QUERY_ITEM_SIGNAL
 
 
 def set_seed(seed):
@@ -122,7 +122,7 @@ def evaluate_offline_trainer(args, manager: DataManager, conversational_agent: C
     best_auc = conversational_agent.train(args=args, dataset=dataset)
     return (best_auc, conversational_agent.trainer)
 
-def evaluate_online_checker(args, manager: DataManager, conversational_agent: ConversationalAgent, user_agent: UserAgent, use_store: bool = False):
+def evaluate_online_checker(args, manager: DataManager, conversational_agent: ConversationalAgent, user_agent: UserAgent):
     max_session_id = manager.set_online_checker(online_ratio=args.online_ratio)
     num_session = min(max_session_id, args.num_session)
 
@@ -166,3 +166,69 @@ def evaluate_online_checker(args, manager: DataManager, conversational_agent: Co
                 success_rate.append(0)
         
     return (np.mean(num_turn), np.mean(success_rate))
+
+
+def evaluate_offline_online_loop(args, manager: DataManager, conversational_agent: ConversationalAgent, user_agent: UserAgent, num_loop: int = 1):
+    max_session_id = manager.set_online_checker(online_ratio=args.online_ratio)
+    num_session = min(max_session_id, args.num_session)
+    failure_turn = args.num_turn + args.failure_penalty
+    
+    for loop_id in range(num_loop):
+        dataset = manager.set_offline_trainer(split_ratio=args.split_ratio)
+        best_auc = conversational_agent.train(args=args, dataset=dataset)
+        print(f"===== AUC at LOOP {loop_id}: {best_auc} ======")
+
+        num_turn, success_rate = [], []
+        session_interaction_matrix = []
+        for session_id in range(num_session):
+            print(f"====== SESSION {session_id} =====")
+            data_matrix, label_item_ids, label_attribute_ids = manager.set_session(trainer=conversational_agent.trainer, device=args.device)
+            user_id = manager.session2user[session_id]
+
+            conversational_agent.set_session(session_id=session_id, data_matrix=data_matrix)
+            user_agent.set_session(session_id=session_id, label_item_ids=label_item_ids, label_attribute_ids=label_attribute_ids)
+            
+            is_stop =  False
+            for turn_id in range(args.num_turn):
+                if is_stop:
+                    break
+                
+                query_type, query_id = conversational_agent.check()
+                response = user_agent.response(query_type=query_type, query_id=query_id)
+                if isinstance(response, tuple): 
+                    response_type, response_item_ids = response
+                    assert response_type == YES_SINGAL
+                    num_turn.append(turn_id)
+                    success_rate.append(1)
+                    is_stop = True
+                elif response == QUIT_SINGAL:
+                    num_turn.append(failure_turn)
+                    success_rate.append(0)
+                    is_stop = True
+                else:
+                    conversational_agent.set_turn(query_type=query_type, query_id=query_id, response=response)
+                
+                if query_type == QUERY_ITEM_SIGNAL:
+                    for item_id in query_id:
+                        if item_id in response_item_ids:
+                            session_interaction_matrix.append([user_id, item_id, 1])
+                        else:
+                            session_interaction_matrix.append([user_id, item_id, 0])
+                
+            if not is_stop:
+                query_id = conversational_agent.evaluate()
+                response = user_agent.evaluate(query_id)
+                print("===== EVALUATE =====")
+                print("ID: ", query_id)
+                print("RESPONSE: ", response)
+                if response is YES_SINGAL:
+                    num_turn.append(args.num_turn)
+                    success_rate.append(1)
+                else:
+                    num_turn.append(failure_turn)
+                    success_rate.append(0)
+    
+        print(f"===== AVG TRUN at LOOP {loop_id}: {np.mean(num_turn)}, AVG SR at LOOP {loop_id}: {np.mean(success_rate)} =====")
+        
+        session_interaction_matrix = np.array(session_interaction_matrix)
+        manager.store(new_interaction_matrix=session_interaction_matrix)

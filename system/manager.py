@@ -274,11 +274,8 @@ class DataManager():
 
         candidate_label_item_ids = list(set(self.label_ids[user_id]) & set(candidate_item_ids))
         candidate_label_attribute_ids = self._compute_label_attribute_ids(data_matrix=candidate_item_matrix, label_ids=candidate_label_item_ids)
-
-        if self.score_func == "embedding":
-            raise NotImplementedError
-        
-        elif self.score_func == "model":
+    
+        if self.score_func == "model":
             data_path = os.path.join(self.data_path, f"{self.data_name}_seq.pickle")
             if os.path.exists(data_path) and enable_save:
                 with open(data_path, "wb") as f:
@@ -320,6 +317,9 @@ class DataManager():
                     score.extend(y_.cpu().tolist())
             score = np.array(score)
             candidate_item_matrix = np.concatenate((candidate_item_matrix, score), axis=1)
+        
+        elif self.score_func == "embedding":
+            raise NotImplementedError
         else:
             raise NotImplementedError
     

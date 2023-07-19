@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 
 from typing import List, Dict
-from evaluator import load_agent, evaluate_online_checker, evaluate_offline_trainer
+from evaluator import load_agent, evaluate_online_checker, evaluate_offline_trainer, evaluate_offline_online_loop
 
 # data is organized into three np.ndarry to store:
 # user_matrix: 1st col: user_ids
@@ -26,6 +26,8 @@ def run_data_dealer(args, redo=False):
         item_matrix = np.column_stack((item_ids, item_matrix))
         
         scores = np.random.randint(low=0, high=2, size=100)
+        scores[0] = 1   # at least one item can satisfy the user demand
+
         times = np.random.randint(low=0, high=2, size = 100)
         indices = np.random.choice(len(user_ids) * len(item_ids), size=100, replace=False)
         rows = indices // len(item_ids)
@@ -39,12 +41,15 @@ def run_data_dealer(args, redo=False):
 
 def run(args):
     manager, conversational_agent, user_agent = load_agent(args)
-    if args.use_tune:
-        best_auc, trainer = evaluate_offline_trainer(args, manager, conversational_agent)
-        print(f"===== BEST AUC: {best_auc} =====")
-        conversational_agent.trainer = trainer
-    average_turn, average_success_rate = evaluate_online_checker(args, manager, conversational_agent, user_agent)
-    print(f"===== AVG TRUN: {average_turn}, AVG SR: {average_success_rate} =====")
+    if args.use_loop:
+        evaluate_offline_online_loop(args, manager, conversational_agent)
+    else:
+        if args.use_tune:
+            best_auc, trainer = evaluate_offline_trainer(args, manager, conversational_agent)
+            print(f"===== BEST AUC: {best_auc} =====")
+            conversational_agent.trainer = trainer
+        average_turn, average_success_rate = evaluate_online_checker(args, manager, conversational_agent, user_agent)
+        print(f"===== AVG TRUN: {average_turn}, AVG SR: {average_success_rate} =====")
 
 
 if __name__ == "__main__":
@@ -57,6 +62,9 @@ if __name__ == "__main__":
     parser.add_argument("--num_session", help="number of sessions", default=4, type=int)
     parser.add_argument("--num_turn", help="number of turns per session", default=4, type=int)
     parser.add_argument("--failure_penalty", help="penlty of number of turns for each session", default=3, type=int)
+
+    parser.add_argument("--num_loop", help="number of loops in loop setting", default=2, type=int)
+    parser.add_argument("--use_loop", help="use offline-online loop or not", action="store_true")
     
     parser.add_argument("--use_tune", help="tune trainer or not", action="store_true")
     parser.add_argument("--retriever", help="name of retriever", default="random", choices=["time", "random"])
