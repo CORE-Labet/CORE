@@ -27,9 +27,8 @@ We define uncertainty as the summation of unchecked relevance scores.
 In this regard, the conversational agent acts to minimize uncertainty via querying either attributes or items. Based on the uncertainty minimization framework, we derive
 the expected certainty gain of querying each attribute and item, and develop a novel online decision tree algorithm to decide what to query at each turn. 
 
-<div class="half">
-    <img src="assets/overview.png" height="170">
-</div>
+<img src="assets/overview.png" width=100%>
+
 
 ## Use Cases
 The significant advantage of CORE is that CORE can be easily deployed on any existing recommendation platform, because CORE acts as a bridge connecting the conversational agent and recommender agent.
