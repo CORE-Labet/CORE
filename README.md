@@ -11,7 +11,7 @@
 **CORE** is a plug-and-play conversational agent for any recommender system built upon [PyTorch](https://pytorch.org). 
 CORE is:
 
-- **Comprehensive**: CORE provides data manager, offline trainer, and online checker.
+- **Comprehensive**: CORE provides a data manager, an offline trainer, and an online checker.
 - **Flexible**: CORE could be integrated into any recommender system.
 - **Efficient**: CORE is built upon an online decision tree algorithm instead of heavily learning algorithms.
 
@@ -24,14 +24,13 @@ It could benefit any recommendation platform in a plug-and-play style.
 Here, CORE treats a recommender system as an offline relevance score estimator to produce an estimated relevance score for each item; while a conversational agent is regarded as
 an online relevance score checker to check these estimated scores in each session.
 We define uncertainty as the summation of unchecked relevance scores. 
-In this regard, the conversational agent acts to minimize uncertainty via querying either attributes or items. Based on the uncertainty minimization framework, we derive
-the expected certainty gain of querying each attribute and item, and develop a novel online decision tree algorithm to decide what to query at each turn. 
+In this regard, the conversational agent acts to minimize uncertainty by querying either attributes or items. Based on the uncertainty minimization framework, we derive the expected certainty gain of querying each attribute and item and develop a novel online decision tree algorithm to decide what to query at each turn. 
 
 <img src="assets/overview.jpeg" width=100%>
 
 
 ## Use Cases
-The significant advantage of CORE is that CORE can be easily deployed on any existing recommendation platform, because CORE acts as a bridge connecting the conversational agent and recommender agent.
+The significant advantage of CORE is that CORE can be easily deployed on any existing recommendation platform because CORE acts as a bridge connecting the conversational agent and recommender agent.
 In other words, in the proposed offline-training and online-checking paradigm, CORE only requires the estimated relevance scores from the recommender agent and the render (including both text extractor and text generator) from the conversational agent.
 
 
