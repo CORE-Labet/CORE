@@ -45,7 +45,7 @@ In other words, in the proposed offline-training and online-checking paradigm, C
 
 ## Citing CORE
 ```bibtex
-@software{Core,
+@software{CORE,
   author = {Jiarui Jin, Xianyu Chen, Fanghua Ye, Mengyue Yang, Yue Feng, Weinan Zhang, Yong Yu, and Jun Wang},
   title = {Core: A Plug-and-Play Conversational Agent for Recommender System},
   year = {2023},
