@@ -39,7 +39,7 @@ If you find CORE useful, please cite it in your publications.
 
 .. code-block:: bibtex
 
-      @software{Core,
+      @software{CORE,
         author = {Jiarui Jin, Xianyu Chen, Fanghua Ye, Mengyue Yang, Yue Feng, Weinan Zhang, Yong Yu, and Jun Wang},
         title = {Core: A Plug-and-Play Conversational Agent for Recommender System},
         year = {2023},
