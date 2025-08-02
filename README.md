@@ -56,6 +56,16 @@ In other words, in the proposed offline-training and online-checking paradigm, C
 }
 ```
 
+```bibtex
+@inproceedings{jin2025not,
+  title={Why Not Together? A Multiple-Round Recommender System for Queries and Items},
+  author={Jin, Jiarui and Chen, Xianyu and Zhang, Weinan and Yu, Yong and Wang, Jun},
+  booktitle={Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1},
+  pages={601--612},
+  year={2025}
+}
+```
+
 
 ## The Team
 Core developers of the CORE system are [Jiarui Jin](https://github.com/Jinjiarui) and [Xianyu Chen](https://github.com/ChenXianyu2002).
